@@ -33,7 +33,7 @@ public class PlayerMovementControl : MonoBehaviour
 
         Plane plane = new Plane(Vector3.up, transform.position);
         
-        Debug.Log($"Plane {plane}");
+       // Debug.Log($"Plane {plane}");
 
         if (plane.Raycast(ray, out float distance))
         {
