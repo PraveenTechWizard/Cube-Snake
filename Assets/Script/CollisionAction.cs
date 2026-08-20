@@ -16,8 +16,6 @@ public class CollisionAction : MonoBehaviour
             return;
         }
 
-        _snakeController.bodyPrefab = collision.gameObject;
-        
         NumberCube numberCube =
             collision.gameObject.GetComponent<NumberCube>();
 
@@ -34,14 +32,31 @@ public class CollisionAction : MonoBehaviour
 
         Debug.Log($"Player hit cube: {value}");
 
-        // Ask SnakeController whether it can collect it.
         bool collected =
-            _snakeController.CollectValue(value);
+            _snakeController.CollectValue(
+                value,
+                collision.gameObject
+            );
 
-        // Only destroy the obstacle if it was actually collected.
         if (collected)
         {
-            Destroy(collision.gameObject);
+            // Disable physics/collision.
+            Collider cubeCollider =
+                collision.gameObject.GetComponent<Collider>();
+
+            if (cubeCollider != null)
+            {
+                cubeCollider.enabled = false;
+            }
+
+            Rigidbody rb =
+                collision.gameObject.GetComponent<Rigidbody>();
+
+            if (rb != null)
+            {
+                rb.isKinematic = true;
+                rb.useGravity = false;
+            }
         }
     }
 }
