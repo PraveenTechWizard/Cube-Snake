@@ -1,104 +1,231 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class SpawnCube : MonoBehaviour
 {
     [Header("Spawn GameObjects")]
-    [SerializeField] private List<GameObject> spawnCubes = new List<GameObject>();
+    [SerializeField] private List<GameObject> spawnCubes =
+        new List<GameObject>();
 
-    [SerializeField] private int spawnCount = 10;
+    [Header("Spawn Settings")]
+    [SerializeField] private int startingSpawnCount = 50;
+    [SerializeField] private int minimumCubeCount = 30;
+    [SerializeField] private int respawnAmount = 10;
+
     [SerializeField] private float spawnHeightOffset = 0.1f;
+
+    [Header("Check Settings")]
+    [SerializeField] private float checkInterval = 1f;
 
     [Header("Plane")]
     [SerializeField] private Transform plane;
 
 
-    private void Start()
-    {
-        SpawnCubesRandomly();
-    }
+    private Renderer _planeRenderer;
+
+    private bool _isSpawning;
 
 
-    private void SpawnCubesRandomly()
+    // =========================================================
+    // UNITY
+    // =========================================================
+
+    private void Awake()
     {
-        if (spawnCubes.Count == 0)
+        if (plane == null)
         {
-            Debug.LogError("No cubes assigned to Spawn Cubes list.");
+            Debug.LogError("Plane is not assigned.");
             return;
         }
 
-        Renderer planeRenderer = plane.GetComponent<Renderer>();
+        _planeRenderer = plane.GetComponent<Renderer>();
 
-        if (planeRenderer == null)
+        if (_planeRenderer == null)
         {
             Debug.LogError("Plane needs a Renderer.");
-            return;
-        }
-
-        // Create a copy so the Inspector list order doesn't change.
-        List<GameObject> shuffledCubes =
-            new List<GameObject>(spawnCubes);
-
-        // Shuffle the cube list.
-        ShuffleList(shuffledCubes);
-
-
-        for (int i = 0; i < spawnCount; i++)
-        {
-            // If spawnCount is greater than list size,
-            // start again from a random position in the shuffled list.
-            GameObject cubeToSpawn =
-                shuffledCubes[i % shuffledCubes.Count];
-
-            SpawnCubeAtRandomPosition(
-                cubeToSpawn,
-                planeRenderer
-            );
         }
     }
 
 
-    private void SpawnCubeAtRandomPosition(
-        GameObject cubeToSpawn,
-        Renderer planeRenderer)
+    private void Start()
     {
-        Bounds bounds = planeRenderer.bounds;
+        // Spawn the initial 50 cubes.
+        SpawnCubes(startingSpawnCount);
 
-        float randomX = Random.Range(
-            bounds.min.x,
-            bounds.max.x
+        // Start continuously checking the cube count.
+        StartCoroutine(CheckCubeCountRoutine());
+    }
+
+
+    // =========================================================
+    // CHECK CUBE COUNT
+    // =========================================================
+
+    private IEnumerator CheckCubeCountRoutine()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(checkInterval);
+
+            CheckCubeCount();
+        }
+    }
+
+
+    // =========================================================
+    // CHECK
+    // =========================================================
+
+    private void CheckCubeCount()
+    {
+        int currentCubeCount = CountWorldCubes();
+
+        Debug.Log(
+            $"World Cubes: {currentCubeCount}"
         );
 
-        float randomZ = Random.Range(
-            bounds.min.z,
-            bounds.max.z
-        );
 
-        Vector3 spawnPosition = new Vector3(
-            randomX,
-            bounds.max.y + spawnHeightOffset,
-            randomZ
+        // -----------------------------------------------------
+        // If cubes are below minimum,
+        // spawn another batch.
+        // -----------------------------------------------------
+
+        if (currentCubeCount < minimumCubeCount)
+        {
+            Debug.Log(
+                $"Cube count is low ({currentCubeCount}). " +
+                $"Spawning {respawnAmount} cubes."
+            );
+
+            SpawnCubes(respawnAmount);
+        }
+    }
+
+
+    // =========================================================
+    // COUNT WORLD CUBES
+    // =========================================================
+
+    private int CountWorldCubes()
+    {
+        /*
+         * Find all objects with the Cube tag.
+         *
+         * This counts only cubes currently existing
+         * in the scene.
+         */
+
+        GameObject[] cubes =
+            GameObject.FindGameObjectsWithTag("Cube");
+
+        return cubes.Length;
+    }
+
+
+    // =========================================================
+    // SPAWN CUBES
+    // =========================================================
+
+    private void SpawnCubes(int amount)
+    {
+        if (_isSpawning)
+        {
+            return;
+        }
+
+        if (spawnCubes.Count == 0)
+        {
+            Debug.LogError(
+                "No cubes assigned to Spawn Cubes list."
+            );
+
+            return;
+        }
+
+        if (_planeRenderer == null)
+        {
+            Debug.LogError(
+                "Plane Renderer is missing."
+            );
+
+            return;
+        }
+
+
+        _isSpawning = true;
+
+
+        for (int i = 0; i < amount; i++)
+        {
+            SpawnRandomCube();
+        }
+
+
+        _isSpawning = false;
+    }
+
+
+    // =========================================================
+    // SPAWN RANDOM CUBE
+    // =========================================================
+
+    private void SpawnRandomCube()
+    {
+        int randomIndex =
+            Random.Range(
+                0,
+                spawnCubes.Count
+            );
+
+
+        GameObject cubeToSpawn =
+            spawnCubes[randomIndex];
+
+
+        SpawnCubeAtRandomPosition(
+            cubeToSpawn
         );
+    }
+
+
+    // =========================================================
+    // SPAWN POSITION
+    // =========================================================
+
+    private void SpawnCubeAtRandomPosition(
+        GameObject cubeToSpawn)
+    {
+        Bounds bounds =
+            _planeRenderer.bounds;
+
+
+        float randomX =
+            Random.Range(
+                bounds.min.x,
+                bounds.max.x
+            );
+
+
+        float randomZ =
+            Random.Range(
+                bounds.min.z,
+                bounds.max.z
+            );
+
+
+        Vector3 spawnPosition =
+            new Vector3(
+                randomX,
+                bounds.max.y + spawnHeightOffset,
+                randomZ
+            );
+
 
         Instantiate(
             cubeToSpawn,
             spawnPosition,
             Quaternion.identity
         );
-    }
-
-
-    private void ShuffleList(List<GameObject> list)
-    {
-        for (int i = list.Count - 1; i > 0; i--)
-        {
-            int randomIndex = Random.Range(0, i + 1);
-
-            GameObject temporary = list[i];
-
-            list[i] = list[randomIndex];
-
-            list[randomIndex] = temporary;
-        }
     }
 }

@@ -31,8 +31,11 @@ public class SnakeController : MonoBehaviour
     // [Head][4Cube][2Cube][2Cube]
     private readonly List<GameObject> _bodyCubes =
         new List<GameObject>();
-
+    //
     private bool _isMerging;
+    public int HeadValue => _values[0];
+    
+ 
 
 
     // =========================================================

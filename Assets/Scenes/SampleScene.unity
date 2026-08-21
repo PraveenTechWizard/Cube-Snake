@@ -1215,8 +1215,13 @@ MonoBehaviour:
   spawnCubes:
   - {fileID: 5516039999703856484, guid: 9f5011be2bc682e40bacdb4ddd8de054, type: 3}
   - {fileID: 9244033752310586, guid: c9d883690e728244db8428c49792339e, type: 3}
-  spawnCount: 100
+  - {fileID: 2061926895489826128, guid: 4af4487e3d680d34b9bc28e8f9c451c3, type: 3}
+  - {fileID: 3339931018335772369, guid: c7d4f9dea7554d243a03fa4b6ef82fab, type: 3}
+  startingSpawnCount: 30
+  minimumCubeCount: 25
+  respawnAmount: 10
   spawnHeightOffset: 0.5
+  checkInterval: 1
   plane: {fileID: 131411443}
 --- !u!4 &1912010383
 Transform:

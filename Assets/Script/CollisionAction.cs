@@ -38,25 +38,43 @@ public class CollisionAction : MonoBehaviour
                 collision.gameObject
             );
 
-        if (collected)
+        if (!collected)
         {
-            // Disable physics/collision.
-            Collider cubeCollider =
-                collision.gameObject.GetComponent<Collider>();
+            return;
+        }
 
-            if (cubeCollider != null)
-            {
-                cubeCollider.enabled = false;
-            }
+        // -------------------------------------------------
+        // This cube is now part of the snake.
+        // It is no longer a world obstacle.
+        // -------------------------------------------------
 
-            Rigidbody rb =
-                collision.gameObject.GetComponent<Rigidbody>();
+        collision.gameObject.tag = "Untagged";
 
-            if (rb != null)
-            {
-                rb.isKinematic = true;
-                rb.useGravity = false;
-            }
+
+        // -------------------------------------------------
+        // Disable collision.
+        // -------------------------------------------------
+
+        Collider cubeCollider =
+            collision.gameObject.GetComponent<Collider>();
+
+        if (cubeCollider != null)
+        {
+            cubeCollider.enabled = false;
+        }
+
+
+        // -------------------------------------------------
+        // Disable physics.
+        // -------------------------------------------------
+
+        Rigidbody rb =
+            collision.gameObject.GetComponent<Rigidbody>();
+
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.useGravity = false;
         }
     }
 }
