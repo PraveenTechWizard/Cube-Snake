@@ -756,7 +756,7 @@ GameObject:
   - component: {fileID: 201033310}
   - component: {fileID: 201033309}
   - component: {fileID: 201033308}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Bot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -958,7 +958,7 @@ GameObject:
   - component: {fileID: 250320450}
   - component: {fileID: 250320457}
   - component: {fileID: 250320455}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Head(Player)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1550,7 +1550,7 @@ GameObject:
   - component: {fileID: 789105856}
   - component: {fileID: 789105855}
   - component: {fileID: 789105854}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Bot (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -5,6 +5,10 @@ public class BotCollisionAction : MonoBehaviour
     private SnakeController _snakeController;
     private BotTargetDetector _targetDetector;
 
+    private int _cubeLayer;
+    private int _playerBodyLayer;
+
+
     private void Awake()
     {
         _snakeController =
@@ -12,35 +16,89 @@ public class BotCollisionAction : MonoBehaviour
 
         _targetDetector =
             GetComponent<BotTargetDetector>();
+
+
+        _cubeLayer =
+            LayerMask.NameToLayer("Cube");
+
+        _playerBodyLayer =
+            LayerMask.NameToLayer("PlayerBody");
     }
 
-    private void OnCollisionEnter(Collision collision)
+
+    private void OnCollisionEnter(
+        Collision collision)
     {
-        if (!collision.gameObject.CompareTag("Cube"))
+        GameObject target =
+            collision.gameObject;
+
+
+        // ---------------------------------------------
+        // NEVER COLLECT OWN BODY
+        // ---------------------------------------------
+
+        if (target.transform.IsChildOf(transform))
+        {
             return;
+        }
+
+
+        int targetLayer =
+            target.layer;
+
+
+        bool isWorldCube =
+            targetLayer == _cubeLayer;
+
+
+        bool isPlayerBody =
+            targetLayer == _playerBodyLayer;
+
+
+        // ---------------------------------------------
+        // BOT CAN COLLECT ONLY:
+        //
+        // World Cube
+        // Player Body
+        // ---------------------------------------------
+
+        if (!isWorldCube &&
+            !isPlayerBody)
+        {
+            return;
+        }
+
 
         NumberCube numberCube =
-            collision.gameObject.GetComponent<NumberCube>();
+            target.GetComponent<NumberCube>();
+
 
         if (numberCube == null)
             return;
 
+
         int value =
             numberCube.CubeValue;
+
+
+        Debug.Log(
+            $"Bot hit value: {value}"
+        );
+
 
         bool collected =
             _snakeController.CollectValue(
                 value,
-                collision.gameObject
+                target
             );
 
-        // =====================================================
-        // BOT CANNOT COLLECT THIS CUBE
-        // =====================================================
+
+        // ---------------------------------------------
+        // FAILED TO COLLECT
+        // ---------------------------------------------
 
         if (!collected)
         {
-            // Force detector to forget this target.
             if (_targetDetector != null)
             {
                 _targetDetector.ClearTarget();
@@ -49,25 +107,38 @@ public class BotCollisionAction : MonoBehaviour
             return;
         }
 
-        // =====================================================
-        // COLLECTED
-        // =====================================================
 
-        Collider cubeCollider =
-            collision.gameObject.GetComponent<Collider>();
+        // ---------------------------------------------
+        // SUCCESSFULLY COLLECTED
+        // ---------------------------------------------
 
-        if (cubeCollider != null)
-        {
-            cubeCollider.enabled = false;
-        }
+        // IMPORTANT:
+        // Do NOT disable collider.
+        //
+        // Enemy must still be able to collect
+        // this cube later.
+
 
         Rigidbody rb =
-            collision.gameObject.GetComponent<Rigidbody>();
+            target.GetComponent<Rigidbody>();
+
 
         if (rb != null)
         {
             rb.isKinematic = true;
+
             rb.useGravity = false;
+        }
+
+
+        // This cube now belongs to the BOT.
+        target.layer =
+            LayerMask.NameToLayer("BotBody");
+
+
+        if (_targetDetector != null)
+        {
+            _targetDetector.ClearTarget();
         }
     }
 }

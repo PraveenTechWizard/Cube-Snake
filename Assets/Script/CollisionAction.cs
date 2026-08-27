@@ -4,77 +4,105 @@ public class CollisionAction : MonoBehaviour
 {
     private SnakeController _snakeController;
 
+    private int _cubeLayer;
+    private int _botBodyLayer;
+
+
     private void Awake()
     {
-        _snakeController = GetComponent<SnakeController>();
+        _snakeController =
+            GetComponent<SnakeController>();
+
+
+        _cubeLayer =
+            LayerMask.NameToLayer("Cube");
+
+        _botBodyLayer =
+            LayerMask.NameToLayer("BotBody");
     }
 
-    private void OnCollisionEnter(Collision collision)
+
+    private void OnCollisionEnter(
+        Collision collision)
     {
-        if (!collision.gameObject.CompareTag("Cube"))
+        GameObject target =
+            collision.gameObject;
+
+
+        // Don't collect own body.
+        if (target.transform.IsChildOf(transform))
         {
             return;
         }
+
+
+        int targetLayer =
+            target.layer;
+
+
+        bool isWorldCube =
+            targetLayer == _cubeLayer;
+
+
+        bool isBotBody =
+            targetLayer == _botBodyLayer;
+
+
+        // Player can collect:
+        //
+        // World Cube
+        // Bot Body
+        if (!isWorldCube &&
+            !isBotBody)
+        {
+            return;
+        }
+
 
         NumberCube numberCube =
-            collision.gameObject.GetComponent<NumberCube>();
+            target.GetComponent<NumberCube>();
+
 
         if (numberCube == null)
-        {
-            Debug.LogWarning(
-                "The object has Cube tag but no NumberCube component."
-            );
-
             return;
-        }
 
-        int value = numberCube.CubeValue;
 
-        Debug.Log($"Player hit cube: {value}");
+        int value =
+            numberCube.CubeValue;
+
+
+        Debug.Log(
+            $"Player hit cube: {value}"
+        );
+
 
         bool collected =
             _snakeController.CollectValue(
                 value,
-                collision.gameObject
+                target
             );
+
 
         if (!collected)
         {
             return;
         }
 
-        // -------------------------------------------------
-        // This cube is now part of the snake.
-        // It is no longer a world obstacle.
-        // -------------------------------------------------
-
-        collision.gameObject.tag = "Untagged";
-
-
-        // -------------------------------------------------
-        // Disable collision.
-        // -------------------------------------------------
-
-        Collider cubeCollider =
-            collision.gameObject.GetComponent<Collider>();
-
-        if (cubeCollider != null)
-        {
-            cubeCollider.enabled = false;
-        }
-
-
-        // -------------------------------------------------
-        // Disable physics.
-        // -------------------------------------------------
 
         Rigidbody rb =
-            collision.gameObject.GetComponent<Rigidbody>();
+            target.GetComponent<Rigidbody>();
+
 
         if (rb != null)
         {
             rb.isKinematic = true;
+
             rb.useGravity = false;
         }
+
+
+        // This cube now belongs to PLAYER.
+        target.layer =
+            LayerMask.NameToLayer("PlayerBody");
     }
 }

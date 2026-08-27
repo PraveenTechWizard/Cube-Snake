@@ -17,20 +17,44 @@ public class BotTargetDetector : MonoBehaviour
     private float _nextTargetCheck;
     private float _nextRandomDirection;
 
+
+    private int _cubeLayer;
+    private int _playerBodyLayer;
+    private int _botLayer;
+    private int _botBodyLayer;
+
+
     private void Awake()
     {
-        _snakeController = GetComponent<SnakeController>();
-        _botMovement = GetComponent<BotMovement>();
+        _snakeController =
+            GetComponent<SnakeController>();
+
+        _botMovement =
+            GetComponent<BotMovement>();
+
+
+        _cubeLayer =
+            LayerMask.NameToLayer("Cube");
+
+        _playerBodyLayer =
+            LayerMask.NameToLayer("PlayerBody");
+
+        _botLayer =
+            LayerMask.NameToLayer("Bot");
+
+        _botBodyLayer =
+            LayerMask.NameToLayer("BotBody");
     }
+
 
     private void Start()
     {
         ChooseNewRandomDirection();
     }
 
+
     private void Update()
     {
-        // Check target frequently.
         if (Time.time >= _nextTargetCheck)
         {
             _nextTargetCheck =
@@ -39,34 +63,28 @@ public class BotTargetDetector : MonoBehaviour
             FindBestTarget();
         }
 
-        // If there is no valid target,
-        // move randomly around the map.
+
         if (_currentTarget == null)
         {
             RandomMovement();
             return;
         }
 
-        // Make sure target is still valid.
+
         if (!IsTargetValid(_currentTarget))
         {
             _currentTarget = null;
             return;
         }
 
-        // Move toward target.
+
         MoveTowardsTarget();
     }
-    
-    //
-    public void ClearTarget()
-    {
-        _currentTarget = null;
-    }
 
-    // =========================================================
-    // FIND TARGET
-    // =========================================================
+
+    // =====================================================
+    // FIND BEST TARGET
+    // =====================================================
 
     private void FindBestTarget()
     {
@@ -76,110 +94,213 @@ public class BotTargetDetector : MonoBehaviour
                 detectionRadius
             );
 
+
         GameObject bestTarget = null;
 
-        float bestDistance = Mathf.Infinity;
+        float bestDistance =
+            Mathf.Infinity;
+
 
         foreach (Collider current in objects)
         {
-            if (!current.CompareTag("Cube"))
+            GameObject targetObject =
+                current.gameObject;
+
+
+            // ---------------------------------------------
+            // NEVER TARGET YOURSELF
+            // ---------------------------------------------
+
+            if (targetObject == gameObject)
                 continue;
 
+
+            // Don't target anything inside this bot.
+            if (targetObject.transform.IsChildOf(transform))
+                continue;
+
+
+            int targetLayer =
+                targetObject.layer;
+
+
+            // ---------------------------------------------
+            // ONLY TARGET:
+            //
+            // World Cube
+            // Player Body
+            // ---------------------------------------------
+
+            bool isWorldCube =
+                targetLayer == _cubeLayer;
+
+            bool isPlayerBody =
+                targetLayer == _playerBodyLayer;
+
+
+            if (!isWorldCube &&
+                !isPlayerBody)
+            {
+                continue;
+            }
+
+
+            // ---------------------------------------------
+            // GET NUMBER VALUE
+            // ---------------------------------------------
+
             NumberCube numberCube =
-                current.GetComponent<NumberCube>();
+                targetObject.GetComponent<NumberCube>();
+
 
             if (numberCube == null)
                 continue;
 
+
             int cubeValue =
                 numberCube.CubeValue;
 
-            // VERY IMPORTANT:
-            // Bot cannot collect a bigger cube.
-            if (cubeValue > _snakeController.HeadValue)
+
+            // ---------------------------------------------
+            // BOT CANNOT COLLECT BIGGER VALUE
+            // ---------------------------------------------
+
+            if (cubeValue >
+                _snakeController.HeadValue)
+            {
                 continue;
+            }
+
+
+            // ---------------------------------------------
+            // FIND NEAREST
+            // ---------------------------------------------
 
             float distance =
                 Vector3.Distance(
                     transform.position,
-                    current.transform.position
+                    targetObject.transform.position
                 );
 
-            // Find nearest valid cube.
+
             if (distance < bestDistance)
             {
-                bestDistance = distance;
-                bestTarget = current.gameObject;
+                bestDistance =
+                    distance;
+
+                bestTarget =
+                    targetObject;
             }
         }
 
-        _currentTarget = bestTarget;
+
+        _currentTarget =
+            bestTarget;
     }
 
-    // =========================================================
-    // TARGET VALIDATION
-    // =========================================================
 
-    private bool IsTargetValid(GameObject target)
+    // =====================================================
+    // TARGET VALIDATION
+    // =====================================================
+
+    private bool IsTargetValid(
+        GameObject target)
     {
         if (target == null)
             return false;
 
-        if (!target.CompareTag("Cube"))
+
+        // Don't target own body.
+        if (target.transform.IsChildOf(transform))
             return false;
+
+
+        int targetLayer =
+            target.layer;
+
+
+        bool isWorldCube =
+            targetLayer == _cubeLayer;
+
+
+        bool isPlayerBody =
+            targetLayer == _playerBodyLayer;
+
+
+        if (!isWorldCube &&
+            !isPlayerBody)
+        {
+            return false;
+        }
+
 
         NumberCube numberCube =
             target.GetComponent<NumberCube>();
 
+
         if (numberCube == null)
             return false;
 
-        // Target became too powerful after bot's state changed.
+
+        // Check value again.
         if (numberCube.CubeValue >
             _snakeController.HeadValue)
         {
             return false;
         }
 
+
         return true;
     }
 
-    // =========================================================
+
+    // =====================================================
     // MOVE TO TARGET
-    // =========================================================
+    // =====================================================
 
     private void MoveTowardsTarget()
     {
+        if (_currentTarget == null)
+            return;
+
+
         Vector3 direction =
             _currentTarget.transform.position -
             transform.position;
 
+
         direction.y = 0f;
 
-        if (direction.sqrMagnitude < 0.1f)
+
+        if (direction.sqrMagnitude < 0.01f)
             return;
+
 
         _botMovement.SetMoveDirection(
             direction.normalized
         );
     }
 
-    // =========================================================
+
+    // =====================================================
     // RANDOM MOVEMENT
-    // =========================================================
+    // =====================================================
 
     private void RandomMovement()
     {
-        if (Time.time >= _nextRandomDirection)
+        if (Time.time >=
+            _nextRandomDirection)
         {
             ChooseNewRandomDirection();
         }
     }
 
+
     private void ChooseNewRandomDirection()
     {
         Vector2 random =
             Random.insideUnitCircle.normalized;
+
 
         Vector3 direction =
             new Vector3(
@@ -188,15 +309,31 @@ public class BotTargetDetector : MonoBehaviour
                 random.y
             );
 
-        _botMovement.SetMoveDirection(direction);
+
+        _botMovement.SetMoveDirection(
+            direction
+        );
+
 
         _nextRandomDirection =
-            Time.time + randomDirectionTime;
+            Time.time +
+            randomDirectionTime;
     }
 
-    // =========================================================
+
+    // =====================================================
+    // CLEAR TARGET
+    // =====================================================
+
+    public void ClearTarget()
+    {
+        _currentTarget = null;
+    }
+
+
+    // =====================================================
     // DEBUG
-    // =========================================================
+    // =====================================================
 
     private void OnDrawGizmosSelected()
     {
@@ -204,6 +341,7 @@ public class BotTargetDetector : MonoBehaviour
             transform.position,
             detectionRadius
         );
+
 
         if (_currentTarget != null)
         {

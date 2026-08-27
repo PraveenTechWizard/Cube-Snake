@@ -16,8 +16,10 @@ public class BotMovement : MonoBehaviour
 
         if (_moveDirection.sqrMagnitude < 0.01f)
         {
+          
             _moveDirection = Vector3.forward;
         }
+        
 
         _moveDirection.Normalize();
     }
