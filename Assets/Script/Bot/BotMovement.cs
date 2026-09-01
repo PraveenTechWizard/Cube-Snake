@@ -56,10 +56,7 @@ public class BotMovement : MonoBehaviour
 
     private void MoveForward()
     {
-        transform.position +=
-            transform.forward *
-            moveSpeed *
-            Time.deltaTime;
+        transform.position += transform.forward * moveSpeed * Time.deltaTime;
     }
 
     // =========================================================

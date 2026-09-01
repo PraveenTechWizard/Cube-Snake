@@ -9,6 +9,7 @@ public class BotTargetDetector : MonoBehaviour
     [Header("Random Movement")]
     [SerializeField] private float randomDirectionTime = 2f;
 
+
     private SnakeController _snakeController;
     private BotMovement _botMovement;
 
@@ -19,10 +20,15 @@ public class BotTargetDetector : MonoBehaviour
 
 
     private int _cubeLayer;
+    private int _playerLayer;
     private int _playerBodyLayer;
     private int _botLayer;
     private int _botBodyLayer;
 
+
+    // =====================================================
+    // AWAKE
+    // =====================================================
 
     private void Awake()
     {
@@ -36,6 +42,9 @@ public class BotTargetDetector : MonoBehaviour
         _cubeLayer =
             LayerMask.NameToLayer("Cube");
 
+        _playerLayer =
+            LayerMask.NameToLayer("Player");
+
         _playerBodyLayer =
             LayerMask.NameToLayer("PlayerBody");
 
@@ -47,11 +56,19 @@ public class BotTargetDetector : MonoBehaviour
     }
 
 
+    // =====================================================
+    // START
+    // =====================================================
+
     private void Start()
     {
         ChooseNewRandomDirection();
     }
 
+
+    // =====================================================
+    // UPDATE
+    // =====================================================
 
     private void Update()
     {
@@ -74,6 +91,7 @@ public class BotTargetDetector : MonoBehaviour
         if (!IsTargetValid(_currentTarget))
         {
             _currentTarget = null;
+
             return;
         }
 
@@ -103,83 +121,127 @@ public class BotTargetDetector : MonoBehaviour
 
         foreach (Collider current in objects)
         {
-            GameObject targetObject =
+            GameObject target =
                 current.gameObject;
 
 
             // ---------------------------------------------
-            // NEVER TARGET YOURSELF
+            // DON'T TARGET SELF
             // ---------------------------------------------
 
-            if (targetObject == gameObject)
+            if (target == gameObject)
                 continue;
 
 
-            // Don't target anything inside this bot.
-            if (targetObject.transform.IsChildOf(transform))
+            // ---------------------------------------------
+            // DON'T TARGET OWN BODY
+            // ---------------------------------------------
+
+            if (target.transform.IsChildOf(transform))
                 continue;
 
+
+            // ---------------------------------------------
+            // GET LAYER
+            // ---------------------------------------------
 
             int targetLayer =
-                targetObject.layer;
+                target.layer;
 
-
-            // ---------------------------------------------
-            // ONLY TARGET:
-            //
-            // World Cube
-            // Player Body
-            // ---------------------------------------------
 
             bool isWorldCube =
                 targetLayer == _cubeLayer;
 
+            bool isPlayerHead =
+                targetLayer == _playerLayer;
+
             bool isPlayerBody =
                 targetLayer == _playerBodyLayer;
 
+            bool isBotHead =
+                targetLayer == _botLayer;
+
+            bool isBotBody =
+                targetLayer == _botBodyLayer;
+
+
+            // ---------------------------------------------
+            // ONLY TARGET VALID OBJECTS
+            // ---------------------------------------------
 
             if (!isWorldCube &&
-                !isPlayerBody)
+                !isPlayerHead &&
+                !isPlayerBody &&
+                !isBotHead &&
+                !isBotBody)
             {
                 continue;
             }
 
 
-            // ---------------------------------------------
-            // GET NUMBER VALUE
-            // ---------------------------------------------
+            // =================================================
+            // PLAYER HEAD OR OTHER BOT HEAD
+            // =================================================
 
-            NumberCube numberCube =
-                targetObject.GetComponent<NumberCube>();
-
-
-            if (numberCube == null)
-                continue;
-
-
-            int cubeValue =
-                numberCube.CubeValue;
-
-
-            // ---------------------------------------------
-            // BOT CANNOT COLLECT BIGGER VALUE
-            // ---------------------------------------------
-
-            if (cubeValue >
-                _snakeController.HeadValue)
+            if (isPlayerHead || isBotHead)
             {
-                continue;
+                SnakeController targetSnake =
+                    target.GetComponent<SnakeController>();
+
+
+                if (targetSnake == null)
+                    continue;
+
+
+                // Must be strictly stronger.
+                //
+                // Bot = 8
+                // Target = 4  -> YES
+                //
+                // Bot = 8
+                // Target = 8  -> NO
+                //
+                // Bot = 4
+                // Target = 8  -> NO
+
+                if (_snakeController.HeadValue <=
+                    targetSnake.HeadValue)
+                {
+                    continue;
+                }
             }
 
 
-            // ---------------------------------------------
-            // FIND NEAREST
-            // ---------------------------------------------
+            // =================================================
+            // NORMAL BODY / WORLD CUBE
+            // =================================================
+
+            else
+            {
+                NumberCube numberCube =
+                    target.GetComponent<NumberCube>();
+
+
+                if (numberCube == null)
+                    continue;
+
+
+                if (numberCube.CubeValue >
+                    _snakeController.HeadValue)
+                {
+                    continue;
+                }
+            }
+
+
+            // =================================================
+            // DISTANCE
+            // =================================================
 
             float distance =
                 Vector3.Distance(
                     transform.position,
-                    targetObject.transform.position
+                    target.transform.position
                 );
 
 
@@ -189,7 +251,7 @@ public class BotTargetDetector : MonoBehaviour
                     distance;
 
                 bestTarget =
-                    targetObject;
+                    target;
             }
         }
 
@@ -210,6 +272,10 @@ public class BotTargetDetector : MonoBehaviour
             return false;
 
 
+        if (target == gameObject)
+            return false;
+
+
         // Don't target own body.
         if (target.transform.IsChildOf(transform))
             return false;
@@ -222,40 +288,66 @@ public class BotTargetDetector : MonoBehaviour
         bool isWorldCube =
             targetLayer == _cubeLayer;
 
+        bool isPlayerHead =
+            targetLayer == _playerLayer;
 
         bool isPlayerBody =
             targetLayer == _playerBodyLayer;
 
+        bool isBotHead =
+            targetLayer == _botLayer;
 
-        if (!isWorldCube &&
-            !isPlayerBody)
+        bool isBotBody =
+            targetLayer == _botBodyLayer;
+
+
+        // =================================================
+        // HEAD TARGET
+        // =================================================
+
+        if (isPlayerHead ||
+            isBotHead)
         {
-            return false;
+            SnakeController targetSnake =
+                target.GetComponent<SnakeController>();
+
+
+            if (targetSnake == null)
+                return false;
+
+
+            return _snakeController.HeadValue >
+                   targetSnake.HeadValue;
         }
 
 
-        NumberCube numberCube =
-            target.GetComponent<NumberCube>();
+        // =================================================
+        // BODY / WORLD CUBE
+        // =================================================
 
-
-        if (numberCube == null)
-            return false;
-
-
-        // Check value again.
-        if (numberCube.CubeValue >
-            _snakeController.HeadValue)
+        if (isWorldCube ||
+            isPlayerBody ||
+            isBotBody)
         {
-            return false;
+            NumberCube numberCube =
+                target.GetComponent<NumberCube>();
+
+
+            if (numberCube == null)
+                return false;
+
+
+            return numberCube.CubeValue <=
+                   _snakeController.HeadValue;
         }
 
 
-        return true;
+        return false;
     }
 
 
     // =====================================================
-    // MOVE TO TARGET
+    // MOVE TOWARDS TARGET
     // =====================================================
 
     private void MoveTowardsTarget()
