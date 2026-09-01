@@ -5,10 +5,6 @@ using UnityEngine;
 
 public class SnakeController : MonoBehaviour
 {
-    // =========================================================
-    // INSPECTOR
-    // =========================================================
-
     [Header("Starting Settings")]
     [SerializeField] private int startingValue = 2;
 
@@ -21,58 +17,46 @@ public class SnakeController : MonoBehaviour
     [Header("Head")]
     [SerializeField] private TextMeshPro headText;
 
+    [Header("Snake Follow Settings")]
+    [SerializeField] private float pathPointDistance = 0.08f;
+    [SerializeField] private float bodyFollowSpeed = 18f;
+    [SerializeField] private float bodyRotationSpeed = 14f;
+    [SerializeField] private int pathBufferPoints = 20;
 
-    // =========================================================
-    // SNAKE DATA
-    // =========================================================
+    private readonly List<int> _values = new List<int>();
+    private readonly List<GameObject> _bodyCubes = new List<GameObject>();
 
-    // Index 0 = Head.
-    //
-    // Example:
-    // [8][4][2][2]
-    private readonly List<int> _values =
-        new List<int>();
-
-
-    // Index 0 = Head GameObject.
-    //
-    // Example:
-    // [Head][4Cube][2Cube][2Cube]
-    private readonly List<GameObject> _bodyCubes =
-        new List<GameObject>();
-
+    // made by Bhargav
+    private readonly List<Vector3> _movementPath = new List<Vector3>(256);
 
     private bool _isMerging;
 
+    // made by Bhargav
+    private Vector3 _lastRecordedPosition;
 
-    // =========================================================
-    // PUBLIC
-    // =========================================================
+    // made by Bhargav
+    private int _pathTrimThreshold = 64;
 
     public int HeadValue
     {
         get
         {
-            if (_values.Count == 0)
-                return 0;
+            if (_values.Count == 0) return 0;
 
             return _values[0];
         }
     }
 
-
-    // =========================================================
-    // UNITY
-    // =========================================================
-
     private void Awake()
     {
-        // Add the head.
         _values.Add(startingValue);
 
         _bodyCubes.Add(gameObject);
-    }
 
+        // made by Bhargav
+        _movementPath.Add(transform.position);
+        _lastRecordedPosition = transform.position;
+    }
 
     private void Start()
     {
@@ -83,180 +67,86 @@ public class SnakeController : MonoBehaviour
         PrintSnake();
     }
 
-
     private void Update()
     {
-        // Keep snake head at fixed height.
         transform.position = new Vector3(transform.position.x, 0.5f, transform.position.z);
     }
 
-
-    // =========================================================
-    // COLLECT CUBE
-    // =========================================================
-
-    public bool CollectValue(
-        int value,
-        GameObject collectedCube)
+    // made by Bhargav
+    private void LateUpdate()
     {
-        if (collectedCube == null)
-            return false;
+        RecordHeadPath();
+        FollowHeadPath();
+    }
 
-
-        // -----------------------------------------------------
-        // Cannot collect a greater cube.
-        // -----------------------------------------------------
+    public bool CollectValue(int value, GameObject collectedCube)
+    {
+        if (collectedCube == null) return false;
 
         if (value > HeadValue)
         {
-            Debug.Log(
-                $"Cannot collect {value}. " +
-                $"Head = {HeadValue}"
-            );
+            Debug.Log($"Cannot collect {value}. Head = {HeadValue}");
 
             return false;
         }
 
+        SnakeController oldOwner = GetOwnerOfCube(collectedCube);
 
-        // -----------------------------------------------------
-        // REMOVE FROM OLD SNAKE
-        // -----------------------------------------------------
-
-        SnakeController oldOwner =
-            GetOwnerOfCube(collectedCube);
-
-
-        if (oldOwner != null &&
-            oldOwner != this)
+        if (oldOwner != null && oldOwner != this)
         {
             bool removed = oldOwner.RemoveBodyCube(collectedCube);
-            
-            // Could be the opponent head.
-            if (!removed)
-            {
-                return false;
-            }
+
+            if (!removed) return false;
         }
 
-
-        // -----------------------------------------------------
-        // Prevent duplicate cube.
-        // -----------------------------------------------------
-
-        if (_bodyCubes.Contains(collectedCube))
-        {
-            return false;
-        }
-
-
-        // -----------------------------------------------------
-        // ADD EXACT SAME CUBE
-        // -----------------------------------------------------
+        if (_bodyCubes.Contains(collectedCube)) return false;
 
         _values.Add(value);
 
         _bodyCubes.Add(collectedCube);
 
-
-        // -----------------------------------------------------
-        // CHANGE OWNER
-        // -----------------------------------------------------
-
         collectedCube.transform.SetParent(transform, true);
-
-
-        // -----------------------------------------------------
-        // Sort greater → smaller.
-        // -----------------------------------------------------
 
         SortSnakeByValue();
 
-
-        // -----------------------------------------------------
-        // Update all cube values.
-        // -----------------------------------------------------
-
         UpdateAllVisuals();
-
 
         PrintSnake();
 
-
-        // -----------------------------------------------------
-        // START MERGING
-        // -----------------------------------------------------
-
-        if (!_isMerging)
-        {
-            StartCoroutine(MergeRoutine());
-        }
-
+        if (!_isMerging) StartCoroutine(MergeRoutine());
 
         return true;
     }
 
-
-    // =========================================================
-    // GET OLD OWNER
-    // =========================================================
-
-    private SnakeController GetOwnerOfCube(
-        GameObject cube)
+    private SnakeController GetOwnerOfCube(GameObject cube)
     {
         Transform currentParent = cube.transform.parent;
-        
+
         while (currentParent != null)
         {
             SnakeController snake = currentParent.GetComponent<SnakeController>();
 
-            if (snake != null)
-            {
-                return snake;
-            }
+            if (snake != null) return snake;
 
             currentParent = currentParent.parent;
         }
-        
+
         return null;
     }
-
-
-    // =========================================================
-    // REMOVE BODY CUBE
-    // =========================================================
 
     public bool RemoveBodyCube(GameObject cube)
     {
         int index = _bodyCubes.IndexOf(cube);
 
-        // Cube is not part of this snake.
-        if (index == -1)
-            return false;
-        
-        // Index 0 is the head.
-        // Cannot directly collect head with this method.
-        if (index == 0)
-            return false;
+        if (index == -1) return false;
 
-
-        // -----------------------------------------------------
-        // REMOVE FROM LISTS
-        // -----------------------------------------------------
+        if (index == 0) return false;
 
         _bodyCubes.RemoveAt(index);
 
         _values.RemoveAt(index);
 
-
-        // -----------------------------------------------------
-        // REMOVE PARENT
-        // -----------------------------------------------------
-
         cube.transform.SetParent(null, true);
-        
-        // -----------------------------------------------------
-        // SORT OLD SNAKE AGAIN
-        // -----------------------------------------------------
 
         SortSnakeByValue();
 
@@ -264,38 +154,23 @@ public class SnakeController : MonoBehaviour
 
         PrintSnake();
 
-
         return true;
     }
 
-
-    // =========================================================
-    // SORT SNAKE
-    // =========================================================
-
     private void SortSnakeByValue()
     {
-        // Head always stays at index 0.
-        //
-        // Body:
-        // Greater → Smaller
-        //
-        // [8][4][2][2]
-
         for (int i = 1; i < _values.Count - 1; i++)
         {
             for (int j = i + 1; j < _values.Count; j++)
             {
                 if (_values[j] > _values[i])
                 {
-                    // Swap values.
                     int tempValue = _values[i];
 
                     _values[i] = _values[j];
 
                     _values[j] = tempValue;
 
-                    // Swap GameObjects.
                     GameObject tempCube = _bodyCubes[i];
 
                     _bodyCubes[i] = _bodyCubes[j];
@@ -304,142 +179,217 @@ public class SnakeController : MonoBehaviour
                 }
             }
         }
-        
-        //
+
         UpdateBodyPositions();
     }
 
-    // =========================================================
-    // UPDATE BODY POSITIONS
-    // =========================================================
-
     private void UpdateBodyPositions()
     {
-        if (_bodyCubes.Count <= 1)
-            return;
-
-
-        Vector3 direction = transform.forward;
-
-        direction.y = 0f;
-
-
-        if (direction.sqrMagnitude < 0.001f)
-        {
-            return;
-        }
-
-
-        direction.Normalize();
-
+        // made by Bhargav
+        if (_bodyCubes.Count <= 1 || _movementPath.Count == 0) return;
 
         for (int i = 1; i < _bodyCubes.Count; i++)
         {
-            GameObject previousCube = _bodyCubes[i - 1];
+            GameObject cube = _bodyCubes[i];
 
-            GameObject currentCube = _bodyCubes[i];
+            if (cube == null) continue;
 
+            Vector3 targetPosition;
+            Vector3 targetDirection;
 
-            if (previousCube == null ||
-                currentCube == null)
-            {
-                continue;
-            }
+            GetFollowPoint(i, out targetPosition, out targetDirection);
 
+            targetPosition.y = 0.5f;
 
-            Vector3 targetPosition = previousCube.transform.position - direction * bodySpacing;
+            cube.transform.position = targetPosition;
 
-            targetPosition.y = previousCube.transform.position.y;
-            
-            currentCube.transform.position = targetPosition;
+            targetDirection.y = 0f;
 
-            currentCube.transform.rotation = previousCube.transform.rotation;
+            if (targetDirection.sqrMagnitude > 0.001f) cube.transform.rotation = Quaternion.LookRotation(targetDirection);
         }
     }
 
+    // made by Bhargav
+    private void RecordHeadPath()
+    {
+        if (pathPointDistance <= 0.001f) pathPointDistance = 0.001f;
 
-    // =========================================================
-    // MERGE ROUTINE
-    // =========================================================
+        Vector3 currentPosition = transform.position;
+        Vector3 movement = currentPosition - _lastRecordedPosition;
 
+        movement.y = 0f;
+
+        float distance = movement.magnitude;
+
+        if (distance < pathPointDistance) return;
+
+        Vector3 direction = movement / distance;
+
+        while (distance >= pathPointDistance)
+        {
+            _lastRecordedPosition += direction * pathPointDistance;
+            _lastRecordedPosition.y = currentPosition.y;
+
+            _movementPath.Add(_lastRecordedPosition);
+
+            distance -= pathPointDistance;
+        }
+
+        TrimMovementPath();
+    }
+
+    // made by Bhargav
+    private void TrimMovementPath()
+    {
+        float requiredDistance = (_bodyCubes.Count + pathBufferPoints) * bodySpacing;
+
+        int requiredPoints = Mathf.CeilToInt(requiredDistance / pathPointDistance) + 2;
+
+        int excessPoints = _movementPath.Count - requiredPoints;
+
+        if (excessPoints < _pathTrimThreshold) return;
+
+        _movementPath.RemoveRange(0, excessPoints);
+    }
+
+    // made by Bhargav
+    private void FollowHeadPath()
+    {
+        if (_bodyCubes.Count <= 1 || _movementPath.Count < 2) return;
+
+        float positionLerp = Mathf.Clamp01(bodyFollowSpeed * Time.deltaTime);
+        float rotationLerp = Mathf.Clamp01(bodyRotationSpeed * Time.deltaTime);
+
+        for (int i = 1; i < _bodyCubes.Count; i++)
+        {
+            GameObject cube = _bodyCubes[i];
+
+            if (cube == null) continue;
+
+            Vector3 targetPosition;
+            Vector3 targetDirection;
+
+            GetFollowPoint(i, out targetPosition, out targetDirection);
+
+            targetPosition.y = 0.5f;
+
+            cube.transform.position = Vector3.Lerp(cube.transform.position, targetPosition, positionLerp);
+
+            targetDirection.y = 0f;
+
+            if (targetDirection.sqrMagnitude <= 0.001f) continue;
+
+            Quaternion targetRotation = Quaternion.LookRotation(targetDirection);
+
+            cube.transform.rotation = Quaternion.Slerp(cube.transform.rotation, targetRotation, rotationLerp);
+        }
+    }
+
+    // made by Bhargav
+    private void GetFollowPoint(int bodyIndex, out Vector3 targetPosition, out Vector3 targetDirection)
+    {
+        float distanceBehind = bodySpacing * bodyIndex;
+        float pointOffset = distanceBehind / pathPointDistance;
+
+        int newestIndex = _movementPath.Count - 1;
+
+        float targetIndex = newestIndex - pointOffset;
+
+        if (targetIndex <= 0f)
+        {
+            targetPosition = _movementPath[0];
+
+            if (_movementPath.Count > 1) targetDirection = _movementPath[1] - _movementPath[0];
+            else targetDirection = transform.forward;
+
+            return;
+        }
+
+        int lowerIndex = Mathf.FloorToInt(targetIndex);
+        int upperIndex = lowerIndex + 1;
+
+        if (upperIndex > newestIndex) upperIndex = newestIndex;
+
+        float interpolation = targetIndex - lowerIndex;
+
+        Vector3 lowerPoint = _movementPath[lowerIndex];
+        Vector3 upperPoint = _movementPath[upperIndex];
+
+        targetPosition = Vector3.Lerp(lowerPoint, upperPoint, interpolation);
+
+        targetDirection = upperPoint - lowerPoint;
+
+        if (targetDirection.sqrMagnitude <= 0.001f) targetDirection = transform.forward;
+    }
+
+    public List<GameObject> GetBodyCubes()
+    {
+        return _bodyCubes;
+    }
+
+    // made by Bhargav
+    public void ReleaseBodyOnDefeat(int worldCubeLayer)
+    {
+        for (int i = 1; i < _bodyCubes.Count; i++)
+        {
+            GameObject cube = _bodyCubes[i];
+
+            if (cube == null) continue;
+
+            cube.transform.SetParent(null, true);
+            cube.layer = worldCubeLayer;
+
+            Rigidbody rb = cube.GetComponent<Rigidbody>();
+
+            if (rb != null)
+            {
+                rb.isKinematic = true;
+                rb.useGravity = false;
+            }
+        }
+
+        if (_bodyCubes.Count > 1) _bodyCubes.RemoveRange(1, _bodyCubes.Count - 1);
+        if (_values.Count > 1) _values.RemoveRange(1, _values.Count - 1);
+    }
     private IEnumerator MergeRoutine()
     {
         _isMerging = true;
-
 
         while (true)
         {
             bool foundMerge = false;
 
-
-            // Start from tail.
             for (int i = _values.Count - 1; i > 0; i--)
             {
-                if (_values[i] != _values[i - 1])
-                {
-                    continue;
-                }
-                
+                if (_values[i] != _values[i - 1]) continue;
+
                 foundMerge = true;
-                
-                // Store actual cubes before waiting.
+
                 GameObject firstCube = _bodyCubes[i - 1];
 
                 GameObject secondCube = _bodyCubes[i];
 
-
-                Debug.Log($"Merge: {_values[i - 1]} + " + $"{_values[i]}");
+                Debug.Log($"Merge: {_values[i - 1]} + {_values[i]}");
 
                 yield return new WaitForSeconds(mergeDelay);
-                
-                // -------------------------------------------------
-                // Find indexes again.
-                //
-                // During the delay, another snake may have
-                // collected one of these cubes.
-                // -------------------------------------------------
 
                 int firstIndex = _bodyCubes.IndexOf(firstCube);
 
-                int secondIndex =
-                    _bodyCubes.IndexOf(secondCube);
+                int secondIndex = _bodyCubes.IndexOf(secondCube);
 
-                // Cube was removed/transferred.
-                if (firstIndex == -1 || secondIndex == -1)
-                {
-                    break;
-                }
+                if (firstIndex == -1 || secondIndex == -1) break;
 
+                if (secondIndex != firstIndex + 1) break;
 
-                // Must still be adjacent.
-                if (secondIndex != firstIndex + 1)
-                {
-                    break;
-                }
-
-
-                // Must still have same value.
-                if (_values[firstIndex] != _values[secondIndex])
-                {
-                    break;
-                }
-
+                if (_values[firstIndex] != _values[secondIndex]) break;
 
                 MergeAtIndex(firstIndex);
 
-
-                // Restart from tail.
                 break;
             }
 
-
-            // No merge exists.
-            if (!foundMerge)
-            {
-                break;
-            }
+            if (!foundMerge) break;
         }
-
 
         UpdateAllVisuals();
 
@@ -448,162 +398,66 @@ public class SnakeController : MonoBehaviour
         _isMerging = false;
     }
 
-
-    // =========================================================
-    // MERGE TWO CUBES
-    // =========================================================
-
-    private void MergeAtIndex(
-        int firstIndex)
+    private void MergeAtIndex(int firstIndex)
     {
         int secondIndex = firstIndex + 1;
 
-
-        if (firstIndex < 0 || secondIndex >= _values.Count)
-        {
-            return;
-        }
-
-
-        // -----------------------------------------------------
-        // Double first value.
-        // -----------------------------------------------------
+        if (firstIndex < 0 || secondIndex >= _values.Count) return;
 
         _values[firstIndex] *= 2;
 
-
-        // -----------------------------------------------------
-        // Cube that disappears.
-        // -----------------------------------------------------
-
         GameObject cubeToDestroy = _bodyCubes[secondIndex];
-
-
-        // -----------------------------------------------------
-        // Remove from lists.
-        // -----------------------------------------------------
 
         _values.RemoveAt(secondIndex);
 
         _bodyCubes.RemoveAt(secondIndex);
 
-
-        // -----------------------------------------------------
-        // Destroy second cube.
-        // -----------------------------------------------------
-
-        if (cubeToDestroy != null && cubeToDestroy != gameObject)
-        {
-            Destroy(cubeToDestroy);
-        }
-        
-        // -----------------------------------------------------
-        // Sort again.
-        // -----------------------------------------------------
+        if (cubeToDestroy != null && cubeToDestroy != gameObject) Destroy(cubeToDestroy);
 
         SortSnakeByValue();
-        
-        // -----------------------------------------------------
-        // Update all visuals and actual values.
-        // -----------------------------------------------------
 
         UpdateAllVisuals();
 
         UpdateBodyPositions();
     }
-    
-    // =========================================================
-    // UPDATE ALL VISUALS
-    // =========================================================
 
     private void UpdateAllVisuals()
     {
-        // Update head.
         UpdateHeadVisual();
-        
-        // Update body cubes.
+
         for (int i = 1; i < _bodyCubes.Count; i++)
         {
             UpdateSegmentVisual(i);
         }
     }
 
-    // =========================================================
-    // UPDATE BODY CUBE VISUAL
-    // =========================================================
-
-    private void UpdateSegmentVisual(
-        int index)
+    private void UpdateSegmentVisual(int index)
     {
-        if (index < 0 || index >= _bodyCubes.Count)
-        {
-            return;
-        }
-
+        if (index < 0 || index >= _bodyCubes.Count) return;
 
         GameObject cube = _bodyCubes[index];
-        
-        if (cube == null)
-            return;
-        
-        // -----------------------------------------------------
-        // UPDATE TEXT
-        // -----------------------------------------------------
 
-        TextMeshPro text =
-            cube.GetComponentInChildren<
-                TextMeshPro>();
+        if (cube == null) return;
 
+        TextMeshPro text = cube.GetComponentInChildren<TextMeshPro>();
 
-        if (text != null)
-        {
-            text.text = _values[index].ToString();
-        }
-
-        // -----------------------------------------------------
-        // UPDATE ACTUAL VALUE
-        // -----------------------------------------------------
+        if (text != null) text.text = _values[index].ToString();
 
         NumberCube numberCube = cube.GetComponent<NumberCube>();
 
-        if (numberCube != null)
-        {
-            numberCube.SetValue(_values[index]);
-        }
+        if (numberCube != null) numberCube.SetValue(_values[index]);
     }
-
-    // =========================================================
-    // UPDATE HEAD VISUAL
-    // =========================================================
 
     private void UpdateHeadVisual()
     {
-        if (_values.Count == 0)
-            return;
+        if (_values.Count == 0) return;
 
+        if (headText != null) headText.text = _values[0].ToString();
 
-        // Update head text.
-        if (headText != null)
-        {
-            headText.text =
-                _values[0].ToString();
-        }
+        NumberCube numberCube = GetComponent<NumberCube>();
 
-
-        // Update NumberCube if the head has one.
-        NumberCube numberCube =
-            GetComponent<NumberCube>();
-
-
-        if (numberCube != null)
-        {
-            numberCube.SetValue(_values[0]);
-        }
+        if (numberCube != null) numberCube.SetValue(_values[0]);
     }
-    
-    // =========================================================
-    // DEBUG
-    // =========================================================
 
     private void PrintSnake()
     {

@@ -9,6 +9,15 @@ public class BotTargetDetector : MonoBehaviour
     [Header("Random Movement")]
     [SerializeField] private float randomDirectionTime = 2f;
 
+    [Header("Anti Circle")]
+    [SerializeField] private float minimumTargetDistance = 1.5f;
+    [SerializeField] private float progressCheckTime = 0.6f;
+    [SerializeField] private float minimumProgress = 0.25f;
+    [SerializeField] private float ignoredTargetDuration = 1.5f;
+    [SerializeField] private float escapeTurnAngle = 70f;
+
+    [Header("Performance")]
+    [SerializeField] private int detectionBufferSize = 64;
 
     private SnakeController _snakeController;
     private BotMovement _botMovement;
@@ -18,68 +27,54 @@ public class BotTargetDetector : MonoBehaviour
     private float _nextTargetCheck;
     private float _nextRandomDirection;
 
-
     private int _cubeLayer;
     private int _playerLayer;
     private int _playerBodyLayer;
     private int _botLayer;
     private int _botBodyLayer;
 
+    // made by Bhargav
+    private Collider[] _detectionBuffer;
 
-    // =====================================================
-    // AWAKE
-    // =====================================================
+    // made by Bhargav
+    private GameObject _ignoredTarget;
+
+    // made by Bhargav
+    private float _ignoredTargetUntil;
+
+    // made by Bhargav
+    private float _lastTargetDistance = Mathf.Infinity;
+
+    // made by Bhargav
+    private float _nextProgressCheck;
 
     private void Awake()
     {
-        _snakeController =
-            GetComponent<SnakeController>();
+        _snakeController = GetComponent<SnakeController>();
+        _botMovement = GetComponent<BotMovement>();
 
-        _botMovement =
-            GetComponent<BotMovement>();
+        _cubeLayer = LayerMask.NameToLayer("Cube");
+        _playerLayer = LayerMask.NameToLayer("Player");
+        _playerBodyLayer = LayerMask.NameToLayer("PlayerBody");
+        _botLayer = LayerMask.NameToLayer("Bot");
+        _botBodyLayer = LayerMask.NameToLayer("BotBody");
 
-
-        _cubeLayer =
-            LayerMask.NameToLayer("Cube");
-
-        _playerLayer =
-            LayerMask.NameToLayer("Player");
-
-        _playerBodyLayer =
-            LayerMask.NameToLayer("PlayerBody");
-
-        _botLayer =
-            LayerMask.NameToLayer("Bot");
-
-        _botBodyLayer =
-            LayerMask.NameToLayer("BotBody");
+        // made by Bhargav
+        _detectionBuffer = new Collider[Mathf.Max(16, detectionBufferSize)];
     }
-
-
-    // =====================================================
-    // START
-    // =====================================================
 
     private void Start()
     {
         ChooseNewRandomDirection();
     }
 
-
-    // =====================================================
-    // UPDATE
-    // =====================================================
-
     private void Update()
     {
         if (Time.time >= _nextTargetCheck)
         {
-            _nextTargetCheck =
-                Time.time + targetRefreshTime;
-
+            _nextTargetCheck = Time.time + targetRefreshTime;
             FindBestTarget();
         }
-
 
         if (_currentTarget == null)
         {
@@ -87,360 +82,221 @@ public class BotTargetDetector : MonoBehaviour
             return;
         }
 
-
         if (!IsTargetValid(_currentTarget))
         {
-            _currentTarget = null;
-
+            ClearTarget();
             return;
         }
 
+        // made by Bhargav
+        if (CheckTargetProgress()) return;
 
         MoveTowardsTarget();
     }
 
-
-    // =====================================================
-    // FIND BEST TARGET
-    // =====================================================
-
     private void FindBestTarget()
     {
-        Collider[] objects =
-            Physics.OverlapSphere(
-                transform.position,
-                detectionRadius
-            );
-
+        // made by Bhargav
+        int objectCount = Physics.OverlapSphereNonAlloc(transform.position, detectionRadius, _detectionBuffer);
 
         GameObject bestTarget = null;
 
-        float bestDistance =
-            Mathf.Infinity;
+        float bestDistanceSqr = Mathf.Infinity;
 
-
-        foreach (Collider current in objects)
+        for (int i = 0; i < objectCount; i++)
         {
-            GameObject target =
-                current.gameObject;
+            Collider current = _detectionBuffer[i];
 
+            if (current == null) continue;
 
-            // ---------------------------------------------
-            // DON'T TARGET SELF
-            // ---------------------------------------------
+            GameObject target = current.gameObject;
 
-            if (target == gameObject)
-                continue;
+            if (target == gameObject) continue;
+            if (target.transform.IsChildOf(transform)) continue;
 
+            // made by Bhargav
+            if (target == _ignoredTarget && Time.time < _ignoredTargetUntil) continue;
 
-            // ---------------------------------------------
-            // DON'T TARGET OWN BODY
-            // ---------------------------------------------
+            int targetLayer = target.layer;
 
-            if (target.transform.IsChildOf(transform))
-                continue;
+            bool isWorldCube = targetLayer == _cubeLayer;
+            bool isPlayerHead = targetLayer == _playerLayer;
+            bool isPlayerBody = targetLayer == _playerBodyLayer;
+            bool isBotHead = targetLayer == _botLayer;
+            bool isBotBody = targetLayer == _botBodyLayer;
 
-
-            // ---------------------------------------------
-            // GET LAYER
-            // ---------------------------------------------
-
-            int targetLayer =
-                target.layer;
-
-
-            bool isWorldCube =
-                targetLayer == _cubeLayer;
-
-            bool isPlayerHead =
-                targetLayer == _playerLayer;
-
-            bool isPlayerBody =
-                targetLayer == _playerBodyLayer;
-
-            bool isBotHead =
-                targetLayer == _botLayer;
-
-            bool isBotBody =
-                targetLayer == _botBodyLayer;
-
-
-            // ---------------------------------------------
-            // ONLY TARGET VALID OBJECTS
-            // ---------------------------------------------
-
-            if (!isWorldCube &&
-                !isPlayerHead &&
-                !isPlayerBody &&
-                !isBotHead &&
-                !isBotBody)
-            {
-                continue;
-            }
-
-
-            // =================================================
-            // PLAYER HEAD OR OTHER BOT HEAD
-            // =================================================
+            if (!isWorldCube && !isPlayerHead && !isPlayerBody && !isBotHead && !isBotBody) continue;
 
             if (isPlayerHead || isBotHead)
             {
-                SnakeController targetSnake =
-                    target.GetComponent<SnakeController>();
+                SnakeController targetSnake = target.GetComponent<SnakeController>();
 
-
-                if (targetSnake == null)
-                    continue;
-
-
-                // Must be strictly stronger.
-                //
-                // Bot = 8
-                // Target = 4  -> YES
-                //
-                // Bot = 8
-                // Target = 8  -> NO
-                //
-                // Bot = 4
-                // Target = 8  -> NO
-
-                if (_snakeController.HeadValue <=
-                    targetSnake.HeadValue)
-                {
-                    continue;
-                }
+                if (targetSnake == null) continue;
+                if (_snakeController.HeadValue <= targetSnake.HeadValue) continue;
             }
-
-
-            // =================================================
-            // NORMAL BODY / WORLD CUBE
-            // =================================================
-
             else
             {
-                NumberCube numberCube =
-                    target.GetComponent<NumberCube>();
+                NumberCube numberCube = target.GetComponent<NumberCube>();
 
-
-                if (numberCube == null)
-                    continue;
-
-
-                if (numberCube.CubeValue >
-                    _snakeController.HeadValue)
-                {
-                    continue;
-                }
+                if (numberCube == null) continue;
+                if (numberCube.CubeValue > _snakeController.HeadValue) continue;
             }
 
+            Vector3 difference = target.transform.position - transform.position;
 
-            // =================================================
-            // DISTANCE
-            // =================================================
+            difference.y = 0f;
 
-            float distance =
-                Vector3.Distance(
-                    transform.position,
-                    target.transform.position
-                );
+            float distanceSqr = difference.sqrMagnitude;
 
+            if (distanceSqr >= bestDistanceSqr) continue;
 
-            if (distance < bestDistance)
-            {
-                bestDistance =
-                    distance;
-
-                bestTarget =
-                    target;
-            }
+            bestDistanceSqr = distanceSqr;
+            bestTarget = target;
         }
 
-
-        _currentTarget =
-            bestTarget;
+        // made by Bhargav
+        if (_currentTarget != bestTarget)
+        {
+            _currentTarget = bestTarget;
+            _lastTargetDistance = Mathf.Infinity;
+            _nextProgressCheck = Time.time + progressCheckTime;
+        }
     }
 
-
-    // =====================================================
-    // TARGET VALIDATION
-    // =====================================================
-
-    private bool IsTargetValid(
-        GameObject target)
+    private bool IsTargetValid(GameObject target)
     {
-        if (target == null)
-            return false;
+        if (target == null) return false;
+        if (target == gameObject) return false;
+        if (target.transform.IsChildOf(transform)) return false;
+        if (target == _ignoredTarget && Time.time < _ignoredTargetUntil) return false;
 
+        int targetLayer = target.layer;
 
-        if (target == gameObject)
-            return false;
+        bool isWorldCube = targetLayer == _cubeLayer;
+        bool isPlayerHead = targetLayer == _playerLayer;
+        bool isPlayerBody = targetLayer == _playerBodyLayer;
+        bool isBotHead = targetLayer == _botLayer;
+        bool isBotBody = targetLayer == _botBodyLayer;
 
-
-        // Don't target own body.
-        if (target.transform.IsChildOf(transform))
-            return false;
-
-
-        int targetLayer =
-            target.layer;
-
-
-        bool isWorldCube =
-            targetLayer == _cubeLayer;
-
-        bool isPlayerHead =
-            targetLayer == _playerLayer;
-
-        bool isPlayerBody =
-            targetLayer == _playerBodyLayer;
-
-        bool isBotHead =
-            targetLayer == _botLayer;
-
-        bool isBotBody =
-            targetLayer == _botBodyLayer;
-
-
-        // =================================================
-        // HEAD TARGET
-        // =================================================
-
-        if (isPlayerHead ||
-            isBotHead)
+        if (isPlayerHead || isBotHead)
         {
-            SnakeController targetSnake =
-                target.GetComponent<SnakeController>();
+            SnakeController targetSnake = target.GetComponent<SnakeController>();
 
+            if (targetSnake == null) return false;
 
-            if (targetSnake == null)
-                return false;
-
-
-            return _snakeController.HeadValue >
-                   targetSnake.HeadValue;
+            return _snakeController.HeadValue > targetSnake.HeadValue;
         }
 
-
-        // =================================================
-        // BODY / WORLD CUBE
-        // =================================================
-
-        if (isWorldCube ||
-            isPlayerBody ||
-            isBotBody)
+        if (isWorldCube || isPlayerBody || isBotBody)
         {
-            NumberCube numberCube =
-                target.GetComponent<NumberCube>();
+            NumberCube numberCube = target.GetComponent<NumberCube>();
 
+            if (numberCube == null) return false;
 
-            if (numberCube == null)
-                return false;
-
-
-            return numberCube.CubeValue <=
-                   _snakeController.HeadValue;
+            return numberCube.CubeValue <= _snakeController.HeadValue;
         }
-
 
         return false;
     }
 
-
-    // =====================================================
-    // MOVE TOWARDS TARGET
-    // =====================================================
-
     private void MoveTowardsTarget()
     {
-        if (_currentTarget == null)
-            return;
+        if (_currentTarget == null) return;
 
-
-        Vector3 direction =
-            _currentTarget.transform.position -
-            transform.position;
-
+        Vector3 direction = _currentTarget.transform.position - transform.position;
 
         direction.y = 0f;
 
+        if (direction.sqrMagnitude < 0.01f) return;
 
-        if (direction.sqrMagnitude < 0.01f)
-            return;
-
-
-        _botMovement.SetMoveDirection(
-            direction.normalized
-        );
+        _botMovement.SetMoveDirection(direction.normalized);
     }
 
+    // made by Bhargav
+    private bool CheckTargetProgress()
+    {
+        if (_currentTarget == null) return false;
 
-    // =====================================================
-    // RANDOM MOVEMENT
-    // =====================================================
+        Vector3 difference = _currentTarget.transform.position - transform.position;
+
+        difference.y = 0f;
+
+        float currentDistance = difference.magnitude;
+
+        if (currentDistance <= minimumTargetDistance)
+        {
+            EscapeTarget();
+            return true;
+        }
+
+        if (Time.time < _nextProgressCheck) return false;
+
+        _nextProgressCheck = Time.time + progressCheckTime;
+
+        if (_lastTargetDistance < Mathf.Infinity && currentDistance >= _lastTargetDistance - minimumProgress)
+        {
+            EscapeTarget();
+            return true;
+        }
+
+        _lastTargetDistance = currentDistance;
+
+        return false;
+    }
+
+    // made by Bhargav
+    private void EscapeTarget()
+    {
+        if (_currentTarget != null)
+        {
+            _ignoredTarget = _currentTarget;
+            _ignoredTargetUntil = Time.time + ignoredTargetDuration;
+        }
+
+        float turnDirection = Random.value < 0.5f ? -1f : 1f;
+
+        Vector3 escapeDirection = Quaternion.Euler(0f, escapeTurnAngle * turnDirection, 0f) * transform.forward;
+
+        _currentTarget = null;
+        _lastTargetDistance = Mathf.Infinity;
+        _nextProgressCheck = 0f;
+
+        _botMovement.SetMoveDirection(escapeDirection.normalized);
+
+        _nextRandomDirection = Time.time + randomDirectionTime;
+    }
 
     private void RandomMovement()
     {
-        if (Time.time >=
-            _nextRandomDirection)
-        {
-            ChooseNewRandomDirection();
-        }
+        if (Time.time >= _nextRandomDirection) ChooseNewRandomDirection();
     }
-
 
     private void ChooseNewRandomDirection()
     {
-        Vector2 random =
-            Random.insideUnitCircle.normalized;
+        // made by Bhargav
+        float randomAngle = Random.Range(-65f, 65f);
 
+        // made by Bhargav
+        Vector3 direction = Quaternion.Euler(0f, randomAngle, 0f) * transform.forward;
 
-        Vector3 direction =
-            new Vector3(
-                random.x,
-                0f,
-                random.y
-            );
+        _botMovement.SetMoveDirection(direction.normalized);
 
-
-        _botMovement.SetMoveDirection(
-            direction
-        );
-
-
-        _nextRandomDirection =
-            Time.time +
-            randomDirectionTime;
+        _nextRandomDirection = Time.time + randomDirectionTime;
     }
-
-
-    // =====================================================
-    // CLEAR TARGET
-    // =====================================================
 
     public void ClearTarget()
     {
         _currentTarget = null;
+
+        // made by Bhargav
+        _lastTargetDistance = Mathf.Infinity;
+        _nextProgressCheck = 0f;
     }
-
-
-    // =====================================================
-    // DEBUG
-    // =====================================================
 
     private void OnDrawGizmosSelected()
     {
-        Gizmos.DrawWireSphere(
-            transform.position,
-            detectionRadius
-        );
+        Gizmos.DrawWireSphere(transform.position, detectionRadius);
 
-
-        if (_currentTarget != null)
-        {
-            Gizmos.DrawLine(
-                transform.position,
-                _currentTarget.transform.position
-            );
-        }
+        if (_currentTarget != null) Gizmos.DrawLine(transform.position, _currentTarget.transform.position);
     }
 }

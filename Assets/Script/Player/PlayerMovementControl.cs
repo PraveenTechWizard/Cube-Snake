@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 public class PlayerMovementControl : MonoBehaviour
@@ -6,16 +5,17 @@ public class PlayerMovementControl : MonoBehaviour
     [Header("Movement Settings")]
     [SerializeField] private float speed;
     [SerializeField] private float rotationSpeed;
-    
+
+    [Header("Rotation Settings")]
+    [SerializeField] private float rotationDeadZone = 1f;
+
     private Camera _camera;
-    
-    //
+
     private void Awake()
     {
         _camera = Camera.main;
     }
-    //
-    
+
     public void Update()
     {
         RotateTowardsMouse();
@@ -29,30 +29,25 @@ public class PlayerMovementControl : MonoBehaviour
 
     private void RotateTowardsMouse()
     {
+        if (_camera == null) return;
+
         Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
 
         Plane plane = new Plane(Vector3.up, transform.position);
-        
-       // Debug.Log($"Plane {plane}");
 
-        if (plane.Raycast(ray, out float distance))
-        {
-            Vector3 mouseWorldPosition = ray.GetPoint(distance);
+        if (!plane.Raycast(ray, out float distance)) return;
 
-            Vector3 direction = mouseWorldPosition - transform.position;
-            direction.y = 0f;
+        Vector3 mouseWorldPosition = ray.GetPoint(distance);
 
-            if (direction.sqrMagnitude > 0.01f)
-            {
-                Quaternion targetRotation =
-                    Quaternion.LookRotation(direction);
+        Vector3 direction = mouseWorldPosition - transform.position;
 
-                transform.rotation = Quaternion.Slerp(
-                    transform.rotation,
-                    targetRotation,
-                    rotationSpeed * Time.deltaTime
-                );
-            }
-        }
+        direction.y = 0f;
+
+        // made by Bhargav
+        if (direction.sqrMagnitude <= rotationDeadZone * rotationDeadZone) return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(direction);
+
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
 }

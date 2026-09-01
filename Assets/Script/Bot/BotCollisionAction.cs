@@ -221,8 +221,12 @@ public class BotCollisionAction : MonoBehaviour
         // IMPORTANT
         // Disable enemy gameplay scripts FIRST.
         // ---------------------------------------------
-
+        targetSnake.ReleaseBodyOnDefeat(_cubeLayer);
+        
         DisableEnemySystems(targetHead);
+
+        // made by Bhargav
+        if (targetHead.layer == _botLayer && DynamicBotSpawner.Instance != null) DynamicBotSpawner.Instance.ReportBotDefeated(targetHead);
 
 
         // ---------------------------------------------
