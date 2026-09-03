@@ -1,188 +1,161 @@
+using Photon.Pun;
 using UnityEngine;
 
-public class BotCollisionAction : MonoBehaviour
+public class BotCollisionAction : MonoBehaviourPun
 {
     private SnakeController _snakeController;
     private BotTargetDetector _targetDetector;
-
 
     private int _cubeLayer;
     private int _playerLayer;
     private int _playerBodyLayer;
     private int _botLayer;
     private int _botBodyLayer;
-
-
-    // =====================================================
-    // AWAKE
-    // =====================================================
+    
 
     private void Awake()
     {
-        _snakeController =
-            GetComponent<SnakeController>();
+        _snakeController = GetComponent<SnakeController>();
+        
+        _targetDetector = GetComponent<BotTargetDetector>();
 
-        _targetDetector =
-            GetComponent<BotTargetDetector>();
+        _cubeLayer = LayerMask.NameToLayer("Cube");
 
+        _playerLayer = LayerMask.NameToLayer("Player");
 
-        _cubeLayer =
-            LayerMask.NameToLayer("Cube");
+        _playerBodyLayer = LayerMask.NameToLayer("PlayerBody");
 
-        _playerLayer =
-            LayerMask.NameToLayer("Player");
+        _botLayer = LayerMask.NameToLayer("Bot");
 
-        _playerBodyLayer =
-            LayerMask.NameToLayer("PlayerBody");
-
-        _botLayer =
-            LayerMask.NameToLayer("Bot");
-
-        _botBodyLayer =
-            LayerMask.NameToLayer("BotBody");
+        _botBodyLayer = LayerMask.NameToLayer("BotBody");
     }
 
-
-    // =====================================================
-    // COLLISION
-    // =====================================================
+    
 
     private void OnCollisionEnter(
         Collision collision)
     {
-        GameObject target =
-            collision.gameObject;
-
-
-        // Don't collect own body.
-        if (target.transform.IsChildOf(transform))
-        {
+        // Only the owner controls this bot
+        if (!photonView.IsMine)
             return;
-        }
 
 
-        int targetLayer =
-            target.layer;
+        GameObject target = collision.gameObject;
 
 
-        // =================================================
+        if (target == null)
+            return;
+
+
+        // ---------------------------------------------
+        // Don't collect own body
+        // ---------------------------------------------
+
+        if (target.transform.IsChildOf(transform))
+            return;
+
+
+        int targetLayer = target.layer;
+
+  
         // PLAYER HEAD
-        // =================================================
-
         if (targetLayer == _playerLayer)
         {
             TryCollectHead(target);
 
             return;
         }
-
-
-        // =================================================
+        
         // OTHER BOT HEAD
-        // =================================================
-
         if (targetLayer == _botLayer)
         {
-            // Don't collide with itself.
             if (target == gameObject)
                 return;
-
 
             TryCollectHead(target);
 
             return;
         }
-
-
-        // =================================================
+        
+       
         // NORMAL CUBE / BODY
-        // =================================================
+        bool isWorldCube = targetLayer == _cubeLayer;
 
-        bool isWorldCube =
-            targetLayer == _cubeLayer;
+        bool isPlayerBody = targetLayer == _playerBodyLayer;
 
-        bool isPlayerBody =
-            targetLayer == _playerBodyLayer;
-
-        bool isBotBody =
-            targetLayer == _botBodyLayer;
+        bool isBotBody = targetLayer == _botBodyLayer;
 
 
-        if (isWorldCube ||
-            isPlayerBody ||
-            isBotBody)
+        if (isWorldCube || isPlayerBody || isBotBody)
         {
             TryCollectCube(target);
         }
     }
 
 
-    // =====================================================
-    // COLLECT NORMAL CUBE
-    // =====================================================
-
-    private void TryCollectCube(
-        GameObject target)
+   
+    // COLLECT CUBE
+    private void TryCollectCube(GameObject target)
     {
-        NumberCube numberCube =
-            target.GetComponent<NumberCube>();
+        if (target == null)
+            return;
 
-
+        NumberCube numberCube = target.GetComponent<NumberCube>();
+        
         if (numberCube == null)
             return;
 
-
-        int value =
-            numberCube.CubeValue;
-
-
-        bool collected =
-            _snakeController.CollectValue(
-                value,
-                target
-            );
-
-
-        if (!collected)
+        int value = numberCube.CubeValue;
+        
+        
+        // LOCAL CHECK FIRST
+        if (value > _snakeController.HeadValue)
         {
             ClearTarget();
 
             return;
         }
+        
+        // ---------------------------------------------
+        // REQUEST COLLECTION
+        //
+        // SnakeController sends the request to Master.
+        // Do NOT prepare the object here.
+        // The RPC should handle the actual collection.
+        // ---------------------------------------------
 
+        bool requested = _snakeController.CollectValue(value, target);
+        
+        if (!requested)
+        {
+            ClearTarget();
 
-        PrepareCollectedObject(
-            target
-        );
-
-
+            return;
+        }
+        
         ClearTarget();
     }
-
-
-    // =====================================================
-    // COLLECT PLAYER / BOT HEAD
-    // =====================================================
-
+    
+    // COLLECT ENEMY HEAD
     private void TryCollectHead(GameObject targetHead)
     {
-        SnakeController targetSnake =
-            targetHead.GetComponent<SnakeController>();
-
+        if (targetHead == null)
+            return;
+        
+        SnakeController targetSnake = targetHead.GetComponent<SnakeController>();
+        
         if (targetSnake == null)
             return;
 
+        // Don't collect yourself
+        if (targetSnake == _snakeController)
+            return;
+        
+        int myValue = _snakeController.HeadValue;
 
-        int myValue =
-            _snakeController.HeadValue;
-
-        int targetValue =
-            targetSnake.HeadValue;
-
-
-        // =============================================
+        int targetValue = targetSnake.HeadValue;
+        
         // SAME VALUE
-        // =============================================
 
         if (myValue == targetValue)
         {
@@ -192,12 +165,9 @@ public class BotCollisionAction : MonoBehaviour
 
             return;
         }
-
-
-        // =============================================
+        
+        
         // BOT IS WEAKER
-        // =============================================
-
         if (myValue < targetValue)
         {
             Debug.Log("Bot is weaker.");
@@ -208,65 +178,78 @@ public class BotCollisionAction : MonoBehaviour
         }
 
 
-        // =============================================
+       
         // BOT IS STRONGER
-        // =============================================
 
-        Debug.Log(
-            $"Bot collecting enemy head: {targetValue}"
-        );
-
-
+        Debug.Log($"Bot requesting enemy head: {targetValue}");
+        
         // ---------------------------------------------
         // IMPORTANT
-        // Disable enemy gameplay scripts FIRST.
+        //
+        // DO NOT disable the enemy locally here.
+        //
+        // Do NOT call ReleaseBodyOnDefeat here.
+        //
+        // First request the network collection.
         // ---------------------------------------------
-        targetSnake.ReleaseBodyOnDefeat(_cubeLayer);
+
+        bool requested = _snakeController.CollectValue(targetValue, targetHead);
         
-        DisableEnemySystems(targetHead);
-
-        // made by Bhargav
-        if (targetHead.layer == _botLayer && DynamicBotSpawner.Instance != null) DynamicBotSpawner.Instance.ReportBotDefeated(targetHead);
-
-
-        // ---------------------------------------------
-        // Collect the EXACT enemy head.
-        // ---------------------------------------------
-
-        bool collected =
-            _snakeController.CollectValue(
-                targetValue,
-                targetHead
-            );
-
-
-        if (!collected)
+        if (!requested)
         {
+            ClearTarget();
+
             return;
         }
-
-
-        // ---------------------------------------------
-        // Prepare it as bot body.
-        // ---------------------------------------------
-
-        PrepareCollectedObject(targetHead);
-
-
+        
         ClearTarget();
-
-        Debug.Log(
-            "Enemy head successfully collected!"
-        );
     }
     
+    // =====================================================
+    // PREPARE COLLECTED OBJECT
     //
-    private void DisableEnemySystems(
-        GameObject targetHead)
+    // Keep this method if SnakeController needs it later.
+    // But do not call it directly from collision.
+    // =====================================================
+
+    public void PrepareCollectedObject(
+        GameObject target)
     {
-        // Player movement
-        PlayerMovementControl playerMovement =
-            targetHead.GetComponent<PlayerMovementControl>();
+        if (target == null)
+            return;
+        
+        Rigidbody rb = target.GetComponent<Rigidbody>();
+        
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+
+            rb.angularVelocity = Vector3.zero;
+
+            rb.isKinematic = true;
+
+            rb.useGravity = false;
+        }
+        
+        target.layer = _botBodyLayer;
+    }
+
+
+    // =====================================================
+    // DISABLE ENEMY SYSTEMS
+    //
+    // This should be called through a network RPC,
+    // not directly from collision.
+    // =====================================================
+
+    public void DisableEnemySystems(GameObject targetHead)
+    {
+        if (targetHead == null)
+            return;
+
+
+        PlayerMovementControl playerMovement = targetHead.GetComponent<PlayerMovementControl>();
+
 
         if (playerMovement != null)
         {
@@ -274,9 +257,8 @@ public class BotCollisionAction : MonoBehaviour
         }
 
 
-        // Bot movement
-        BotMovement botMovement =
-            targetHead.GetComponent<BotMovement>();
+        BotMovement botMovement = targetHead.GetComponent<BotMovement>();
+
 
         if (botMovement != null)
         {
@@ -284,39 +266,31 @@ public class BotCollisionAction : MonoBehaviour
         }
 
 
-        // Bot target system
-        BotTargetDetector detector =
-            targetHead.GetComponent<BotTargetDetector>();
+        BotTargetDetector detector = targetHead.GetComponent<BotTargetDetector>();
+
 
         if (detector != null)
         {
             detector.enabled = false;
         }
-
-
-        // Bot collision
-        BotCollisionAction botCollision =
-            targetHead.GetComponent<BotCollisionAction>();
-
+        
+        BotCollisionAction botCollision = targetHead.GetComponent<BotCollisionAction>();
+        
         if (botCollision != null)
         {
             botCollision.enabled = false;
         }
 
 
-        // Player collision
-        CollisionAction playerCollision =
-            targetHead.GetComponent<CollisionAction>();
-
+        CollisionAction playerCollision = targetHead.GetComponent<CollisionAction>();
+        
         if (playerCollision != null)
         {
             playerCollision.enabled = false;
         }
+        
+        SnakeController enemySnake = targetHead.GetComponent<SnakeController>();
 
-
-        // Enemy snake controller
-        SnakeController enemySnake =
-            targetHead.GetComponent<SnakeController>();
 
         if (enemySnake != null)
         {
@@ -325,114 +299,8 @@ public class BotCollisionAction : MonoBehaviour
     }
 
 
-    // =====================================================
-    // DEFEAT SNAKE
-    // =====================================================
-
-    private void DefeatSnake(
-        GameObject targetHead)
-    {
-        // Disable enemy movement.
-
-        PlayerMovementControl playerMovement =
-            targetHead.GetComponent<PlayerMovementControl>();
-
-        if (playerMovement != null)
-        {
-            playerMovement.enabled = false;
-        }
-
-
-        BotMovement botMovement =
-            targetHead.GetComponent<BotMovement>();
-
-        if (botMovement != null)
-        {
-            botMovement.enabled = false;
-        }
-
-
-        // Disable target detector.
-
-        BotTargetDetector detector =
-            targetHead.GetComponent<BotTargetDetector>();
-
-        if (detector != null)
-        {
-            detector.enabled = false;
-        }
-
-
-        // Disable collision action.
-
-        BotCollisionAction botCollision =
-            targetHead.GetComponent<BotCollisionAction>();
-
-        if (botCollision != null)
-        {
-            botCollision.enabled = false;
-        }
-
-
-        CollisionAction playerCollision =
-            targetHead.GetComponent<CollisionAction>();
-
-        if (playerCollision != null)
-        {
-            playerCollision.enabled = false;
-        }
-
-
-        // Disable snake controller.
-
-        SnakeController targetSnake =
-            targetHead.GetComponent<SnakeController>();
-
-        if (targetSnake != null)
-        {
-            targetSnake.enabled = false;
-        }
-
-
-        // For testing.
-
-        targetHead.SetActive(false);
-
-
-        Debug.Log(
-            "TARGET DEFEATED!"
-        );
-    }
-
-
-    // =====================================================
-    // PREPARE COLLECTED CUBE
-    // =====================================================
-
-    private void PrepareCollectedObject(
-        GameObject target)
-    {
-        Rigidbody rb =
-            target.GetComponent<Rigidbody>();
-
-
-        if (rb != null)
-        {
-            rb.isKinematic = true;
-
-            rb.useGravity = false;
-        }
-
-
-        target.layer =
-            _botBodyLayer;
-    }
-
-
-    // =====================================================
+    
     // CLEAR TARGET
-    // =====================================================
-
     private void ClearTarget()
     {
         if (_targetDetector != null)

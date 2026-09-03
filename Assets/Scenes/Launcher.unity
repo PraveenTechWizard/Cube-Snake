@@ -290,6 +290,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 04a9c37d2ec3c6f4e8e0b57b5ff8a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ConnectToServer
+  lobbySceneName: Lobby
 --- !u!1 &504589538
 GameObject:
   m_ObjectHideFlags: 0

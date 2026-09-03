@@ -181,26 +181,29 @@ public class CreateAndJoin : MonoBehaviourPunCallbacks
 
     public override void OnJoinedRoom()
     {
-        Debug.Log("Joined Room Successfully!");
+        Debug.Log(
+            "Joined Room Successfully!"
+        );
+
+        Debug.Log(
+            "Room Name: " +
+            PhotonNetwork.CurrentRoom.Name
+        );
 
 
-        Debug.Log("Room Name: " + PhotonNetwork.CurrentRoom.Name);
+        Debug.Log(
+            "Player Count: " +
+            PhotonNetwork.CurrentRoom.PlayerCount
+        );
 
 
-        Debug.Log("Player Count: " + PhotonNetwork.CurrentRoom.PlayerCount);
-        
-        _isWaitingForRoom =
-            false;
-
-        // =================================================
-        // IMPORTANT
-        //
-        // IMMEDIATELY LOAD GAME
-        //
-        // DO NOT WAIT FOR SECOND PLAYER
-        // =================================================
-
-        PhotonNetwork.LoadLevel(gameSceneName);
+        // Only Master Client controls scene loading.
+        if (PhotonNetwork.IsMasterClient)
+        {
+            PhotonNetwork.LoadLevel(
+                gameSceneName
+            );
+        }
     }
     
     // =====================================================

@@ -3251,7 +3251,7 @@ MonoBehaviour:
   createButton: {fileID: 266234376}
   joinButton: {fileID: 2085437907}
   gameSceneName: Game
-  maxPlayers: 2
+  maxPlayers: 6
 --- !u!1 &1690702504
 GameObject:
   m_ObjectHideFlags: 0

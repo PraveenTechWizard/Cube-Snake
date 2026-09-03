@@ -1,7 +1,8 @@
+using Photon.Pun;
 using TMPro;
 using UnityEngine;
 
-public class NumberCube : MonoBehaviour
+public class NumberCube : MonoBehaviourPun, IPunObservable
 {
     [Header("Cube Data")]
     [SerializeField] private Cubes cubes;
@@ -11,96 +12,74 @@ public class NumberCube : MonoBehaviour
 
     private Renderer _renderer;
 
-    // Runtime value of this specific cube.
     private int _cubeValue;
 
-    // Other scripts can read this value.
     public int CubeValue => _cubeValue;
 
-
-    // =========================================================
-    // UNITY
-    // =========================================================
 
     private void Awake()
     {
         _renderer = GetComponent<Renderer>();
-    }
 
-    private void Start()
-    {
-        InitializeCube();
-    }
-
-
-    // =========================================================
-    // INITIALIZE
-    // =========================================================
-
-    private void InitializeCube()
-    {
-        if (cubes == null)
+        // Initialize only once
+        if (cubes != null)
         {
-            Debug.LogError(
-                $"Cube data is missing on {gameObject.name}"
-            );
-
-            return;
+            _cubeValue = cubes.cubeValue;
         }
-
-        // Get starting value from ScriptableObject.
-        _cubeValue = cubes.cubeValue;
 
         UpdateVisual();
     }
 
 
-    // =========================================================
+    // =====================================================
     // SET VALUE
-    // =========================================================
+    // =====================================================
 
     public void SetValue(int value)
     {
         _cubeValue = value;
 
-        UpdateText();
+        UpdateVisual();
     }
 
 
-    // =========================================================
-    // GET VALUE
-    // =========================================================
-
-    public int GetCubeValue()
-    {
-        return _cubeValue;
-    }
-
-
-    // =========================================================
+    // =====================================================
     // UPDATE VISUAL
-    // =========================================================
+    // =====================================================
 
-    public void UpdateVisual()
+    private void UpdateVisual()
     {
-        UpdateText();
+        if (textMesh != null)
+        {
+            textMesh.text = _cubeValue.ToString();
+        }
 
-        if (_renderer != null && cubes != null)
+        if (_renderer != null &&
+            cubes != null &&
+            cubes.cubeColor != null)
         {
             _renderer.material = cubes.cubeColor;
         }
     }
 
 
-    // =========================================================
-    // UPDATE TEXT
-    // =========================================================
+    // =====================================================
+    // PHOTON SYNCHRONIZATION
+    // =====================================================
 
-    private void UpdateText()
+    public void OnPhotonSerializeView(
+        PhotonStream stream,
+        PhotonMessageInfo info)
     {
-        if (textMesh != null)
+        if (stream.IsWriting)
         {
-            textMesh.text = _cubeValue.ToString();
+            stream.SendNext(_cubeValue);
+        }
+        else
+        {
+            _cubeValue = (int)stream.ReceiveNext();
+
+            UpdateVisual();
         }
     }
 }

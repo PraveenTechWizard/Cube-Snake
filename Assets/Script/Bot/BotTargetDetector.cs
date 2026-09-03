@@ -1,6 +1,7 @@
 using UnityEngine;
+using Photon.Pun;
 
-public class BotTargetDetector : MonoBehaviour
+public class BotTargetDetector : MonoBehaviourPun
 {
     [Header("Detection")]
     [SerializeField] private float detectionRadius = 30f;
@@ -65,14 +66,22 @@ public class BotTargetDetector : MonoBehaviour
 
     private void Start()
     {
+        if (!photonView.IsMine)
+            return;
+
         ChooseNewRandomDirection();
     }
 
     private void Update()
     {
+        if (!photonView.IsMine)
+            return;
+
         if (Time.time >= _nextTargetCheck)
         {
-            _nextTargetCheck = Time.time + targetRefreshTime;
+            _nextTargetCheck =
+                Time.time + targetRefreshTime;
+
             FindBestTarget();
         }
 
@@ -88,8 +97,8 @@ public class BotTargetDetector : MonoBehaviour
             return;
         }
 
-        // made by Bhargav
-        if (CheckTargetProgress()) return;
+        if (CheckTargetProgress())
+            return;
 
         MoveTowardsTarget();
     }

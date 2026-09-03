@@ -1,6 +1,7 @@
+using Photon.Pun;
 using UnityEngine;
 
-public class CollisionAction : MonoBehaviour
+public class CollisionAction : MonoBehaviourPun
 {
     private SnakeController _snakeController;
 
@@ -12,48 +13,79 @@ public class CollisionAction : MonoBehaviour
 
     private void Awake()
     {
-        _snakeController = GetComponent<SnakeController>();
+        _snakeController =
+            GetComponent<SnakeController>();
 
-        _cubeLayer = LayerMask.NameToLayer("Cube");
-        _botLayer = LayerMask.NameToLayer("Bot");
-        _botBodyLayer = LayerMask.NameToLayer("BotBody");
-        _playerBodyLayer = LayerMask.NameToLayer("PlayerBody");
+
+        _cubeLayer =
+            LayerMask.NameToLayer("Cube");
+
+        _botLayer =
+            LayerMask.NameToLayer("Bot");
+
+        _botBodyLayer =
+            LayerMask.NameToLayer("BotBody");
+
+        _playerBodyLayer =
+            LayerMask.NameToLayer("PlayerBody");
     }
 
 
-    private void OnCollisionEnter(Collision collision)
+    private void OnCollisionEnter(
+        Collision collision)
     {
-        GameObject target = collision.gameObject;
+        // =================================================
+        // PHOTON OWNERSHIP CHECK
+        // =================================================
+        //
+        // Only the player who owns this object
+        // can process its collisions.
+        //
+        if (!photonView.IsMine)
+            return;
 
-        // Don't collect own body.
+
+        GameObject target =
+            collision.gameObject;
+
+
+        // =================================================
+        // DON'T COLLECT OWN BODY
+        // =================================================
+
         if (target.transform.IsChildOf(transform))
             return;
 
 
-        // =====================================================
+        // =================================================
         // BOT HEAD
-        // =====================================================
+        // =================================================
 
         if (target.layer == _botLayer)
         {
             TryCollectBotHead(target);
+
             return;
         }
 
 
-        // =====================================================
+        // =================================================
         // WORLD CUBE / BOT BODY
-        // =====================================================
+        // =================================================
 
         bool isWorldCube =
             target.layer == _cubeLayer;
+
 
         bool isBotBody =
             target.layer == _botBodyLayer;
 
 
-        if (!isWorldCube && !isBotBody)
+        if (!isWorldCube &&
+            !isBotBody)
+        {
             return;
+        }
 
 
         TryCollectCube(target);
@@ -64,10 +96,12 @@ public class CollisionAction : MonoBehaviour
     // COLLECT NORMAL CUBE
     // =========================================================
 
-    private void TryCollectCube(GameObject target)
+    private void TryCollectCube(
+        GameObject target)
     {
         NumberCube numberCube =
             target.GetComponent<NumberCube>();
+
 
         if (numberCube == null)
             return;
@@ -84,7 +118,9 @@ public class CollisionAction : MonoBehaviour
             return;
 
 
-        PrepareCollectedObject(target);
+        PrepareCollectedObject(
+            target
+        );
     }
 
 
@@ -92,10 +128,12 @@ public class CollisionAction : MonoBehaviour
     // COLLECT BOT HEAD
     // =========================================================
 
-    private void TryCollectBotHead(GameObject botHead)
+    private void TryCollectBotHead(
+        GameObject botHead)
     {
         SnakeController botSnake =
             botHead.GetComponent<SnakeController>();
+
 
         if (botSnake == null)
         {
@@ -110,16 +148,21 @@ public class CollisionAction : MonoBehaviour
         int playerValue =
             _snakeController.HeadValue;
 
+
         int botValue =
             botSnake.HeadValue;
 
 
         Debug.Log(
-            $"PLAYER = {playerValue} | BOT = {botValue}"
+            $"PLAYER = {playerValue} | " +
+            $"BOT = {botValue}"
         );
 
 
-        // Same value cannot collect.
+        // =================================================
+        // SAME VALUE
+        // =================================================
+
         if (playerValue == botValue)
         {
             Debug.Log(
@@ -130,33 +173,43 @@ public class CollisionAction : MonoBehaviour
         }
 
 
-        // Player must be stronger.
+        // =================================================
+        // BOT IS STRONGER
+        // =================================================
+
         if (playerValue < botValue)
         {
             Debug.Log(
-                "Bot is stronger. Player cannot collect."
+                "Bot is stronger. " +
+                "Player cannot collect."
             );
 
             return;
         }
 
 
-        // -----------------------------------------------------
-        // Player is stronger.
-        // -----------------------------------------------------
+        // =================================================
+        // PLAYER IS STRONGER
+        // =================================================
 
-        Debug.Log("PLAYER COLLECTED BOT HEAD!");
+        Debug.Log(
+            "PLAYER COLLECTED BOT HEAD!"
+        );
 
 
         // Release bot body first.
-        ReleaseSnakeBody(botHead);
+        ReleaseSnakeBody(
+            botHead
+        );
 
 
         // Disable bot gameplay scripts.
-        DisableBotSystems(botHead);
+        DisableBotSystems(
+            botHead
+        );
 
 
-        // Add exact bot head to player body.
+        // Collect exact bot head.
         bool collected =
             _snakeController.CollectValue(
                 botValue,
@@ -168,7 +221,9 @@ public class CollisionAction : MonoBehaviour
             return;
 
 
-        PrepareCollectedObject(botHead);
+        PrepareCollectedObject(
+            botHead
+        );
     }
 
 
@@ -176,18 +231,23 @@ public class CollisionAction : MonoBehaviour
     // RELEASE BOT BODY
     // =========================================================
 
-    private void ReleaseSnakeBody(GameObject snakeHead)
+    private void ReleaseSnakeBody(
+        GameObject snakeHead)
     {
         SnakeController snake =
-            snakeHead.GetComponent<SnakeController>();
+            snakeHead.GetComponent<
+                SnakeController
+            >();
+
 
         if (snake == null)
             return;
 
 
-        // Release body objects.
         Transform[] children =
-            snakeHead.GetComponentsInChildren<Transform>();
+            snakeHead.GetComponentsInChildren<
+                Transform
+            >();
 
 
         foreach (Transform child in children)
@@ -197,7 +257,10 @@ public class CollisionAction : MonoBehaviour
 
 
             NumberCube numberCube =
-                child.GetComponent<NumberCube>();
+                child.GetComponent<
+                    NumberCube
+                >();
+
 
             if (numberCube != null)
             {
@@ -211,34 +274,57 @@ public class CollisionAction : MonoBehaviour
     // DISABLE BOT SYSTEMS
     // =========================================================
 
-    private void DisableBotSystems(GameObject botHead)
+    private void DisableBotSystems(
+        GameObject botHead)
     {
         BotMovement movement =
-            botHead.GetComponent<BotMovement>();
+            botHead.GetComponent<
+                BotMovement
+            >();
+
 
         if (movement != null)
+        {
             movement.enabled = false;
+        }
 
 
         BotTargetDetector detector =
-            botHead.GetComponent<BotTargetDetector>();
+            botHead.GetComponent<
+                BotTargetDetector
+            >();
+
 
         if (detector != null)
+        {
             detector.enabled = false;
+        }
 
 
         BotCollisionAction collisionAction =
-            botHead.GetComponent<BotCollisionAction>();
+            botHead.GetComponent<
+                BotCollisionAction
+            >();
+
 
         if (collisionAction != null)
-            collisionAction.enabled = false;
+        {
+            collisionAction.enabled =
+                false;
+        }
 
 
         SnakeController snakeController =
-            botHead.GetComponent<SnakeController>();
+            botHead.GetComponent<
+                SnakeController
+            >();
+
 
         if (snakeController != null)
-            snakeController.enabled = false;
+        {
+            snakeController.enabled =
+                false;
+        }
     }
 
 
@@ -250,12 +336,18 @@ public class CollisionAction : MonoBehaviour
         GameObject target)
     {
         Rigidbody rb =
-            target.GetComponent<Rigidbody>();
+            target.GetComponent<
+                Rigidbody
+            >();
+
 
         if (rb != null)
         {
-            rb.isKinematic = true;
-            rb.useGravity = false;
+            rb.isKinematic =
+                true;
+
+            rb.useGravity =
+                false;
         }
 
 
