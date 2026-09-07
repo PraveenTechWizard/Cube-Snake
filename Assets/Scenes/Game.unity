@@ -128,6 +128,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 77885005}
+  - component: {fileID: 77885006}
   - component: {fileID: 77885004}
   m_Layer: 0
   m_Name: GameManager
@@ -167,6 +168,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &77885006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 77885003}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f328d2808f3ba6146ad3ce2be840d30f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraTargetSetter
 --- !u!1 &131411439
 GameObject:
   m_ObjectHideFlags: 0
@@ -880,7 +893,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   botPrefab: {fileID: 7847783192014629021, guid: 75931c597da17ab41972f017a9b80806, type: 3}
-  player: {fileID: 8293687181238331091, guid: ba3dfb7fd9caab34a97344e7f49d1db3, type: 3}
   maximumBots: 6
   initialSpawnDelay: 0.35
   respawnDelayMin: 1.5

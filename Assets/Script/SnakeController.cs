@@ -25,11 +25,8 @@ public class SnakeController : MonoBehaviourPunCallbacks
     [SerializeField] private int pathBufferPoints = 20;
 
     private readonly List<int> _values = new List<int>();
-    private readonly List<GameObject> _bodyCubes =
-        new List<GameObject>();
-
-    private readonly List<Vector3> _movementPath =
-        new List<Vector3>(256);
+    private readonly List<GameObject> _bodyCubes = new List<GameObject>();
+    private readonly List<Vector3> _movementPath = new List<Vector3>(256);
 
     private bool _isMerging;
     private bool _isDefeated;
@@ -39,10 +36,8 @@ public class SnakeController : MonoBehaviourPunCallbacks
     private int _pathTrimThreshold = 64;
 
 
-    // =====================================================
+    
     // PUBLIC
-    // =====================================================
-
     public int HeadValue
     {
         get
@@ -58,10 +53,7 @@ public class SnakeController : MonoBehaviourPunCallbacks
     public bool IsDefeated => _isDefeated;
 
 
-    // =====================================================
     // UNITY
-    // =====================================================
-
     private void Awake()
     {
         _values.Add(startingValue);
@@ -70,8 +62,7 @@ public class SnakeController : MonoBehaviourPunCallbacks
 
         _movementPath.Add(transform.position);
 
-        _lastRecordedPosition =
-            transform.position;
+        _lastRecordedPosition = transform.position;
     }
 
 
@@ -90,12 +81,7 @@ public class SnakeController : MonoBehaviourPunCallbacks
         if (_isDefeated)
             return;
 
-        transform.position =
-            new Vector3(
-                transform.position.x,
-                0.5f,
-                transform.position.z
-            );
+        transform.position = new Vector3(transform.position.x, 0.5f, transform.position.z);
     }
 
 
@@ -109,275 +95,199 @@ public class SnakeController : MonoBehaviourPunCallbacks
         FollowHeadPath();
     }
 
-
-    // =====================================================
+    
     // COLLECT REQUEST
-    // =====================================================
-
     public bool CollectValue(
         int value,
-        GameObject collectedCube)
+        GameObject target)
     {
-        if (_isDefeated)
+        if (!photonView.IsMine)
             return false;
 
-        if (collectedCube == null)
+
+        if (target == null)
             return false;
 
-        if (collectedCube == gameObject)
-            return false;
 
+        PhotonView targetView =
+            target.GetComponent<PhotonView>();
+
+
+        if (targetView == null)
+        {
+            Debug.LogWarning(
+                "Target has no PhotonView."
+            );
+
+            return false;
+        }
+        
+        // Local prediction check.
         if (value > HeadValue)
             return false;
 
-
-        PhotonView cubePhotonView =
-            collectedCube.GetComponent<PhotonView>();
-
-
-        // =============================================
-        // NETWORK OBJECT
-        // =============================================
-
-        if (cubePhotonView != null)
-        {
-            photonView.RPC(
-                nameof(RequestCollectCube),
-                RpcTarget.MasterClient,
-                cubePhotonView.ViewID
-            );
-
-            return true;
-        }
-
-
-        // =============================================
-        // NON-NETWORK OBJECT
-        // Master controls it.
-        // =============================================
-
-        if (!PhotonNetwork.IsMasterClient)
-            return false;
-
-
-        CollectValueInternal(
-            value,
-            collectedCube
-        );
-
+        // Send request to Master.
+        photonView.RPC(nameof(RPC_RequestCollect), RpcTarget.MasterClient, targetView.ViewID);
+        
         return true;
     }
-
-
-    // =====================================================
-    // MASTER VALIDATES COLLECTION
-    // =====================================================
-
+    
     [PunRPC]
-    private void RequestCollectCube(
-        int cubeViewID,
-        PhotonMessageInfo info)
+    private void RPC_RequestCollect(int targetViewID, PhotonMessageInfo info)
     {
+        // Only Master validates.
         if (!PhotonNetwork.IsMasterClient)
             return;
+        
+        PhotonView targetView = PhotonView.Find(targetViewID);
 
-        if (_isDefeated)
+        if (targetView == null)
+            return;
+
+        GameObject target = targetView.gameObject;
+
+        NumberCube cube = target.GetComponent<NumberCube>();
+
+        if (cube == null)
             return;
 
 
+        int value = cube.CubeValue;
+        
+        // Master checks the REAL head value.
+        if (value > HeadValue)
+            return;
+        
+        // Tell EVERY client to perform
+        // the same collection.
+        photonView.RPC(nameof(RPC_CollectCube), RpcTarget.All, targetViewID);
+    }
+    
+    // COLLECT ON ALL CLIENTS
+    [PunRPC]
+    private void RPC_CollectCube(int cubeViewID)
+    {
         PhotonView cubeView =
             PhotonView.Find(cubeViewID);
 
 
         if (cubeView == null)
-            return;
-
-
-        GameObject cube =
-            cubeView.gameObject;
-
-
-        NumberCube numberCube =
-            cube.GetComponent<NumberCube>();
-
-
-        if (numberCube == null)
-            return;
-
-
-        int value =
-            numberCube.CubeValue;
-
-
-        // Cannot collect bigger cube
-        if (value > HeadValue)
-            return;
-
-
-        // =============================================
-        // IF TARGET IS ANOTHER SNAKE HEAD
-        // =============================================
-
-        SnakeController targetSnake =
-            cube.GetComponent<SnakeController>();
-
-
-        if (targetSnake != null &&
-            targetSnake != this)
         {
-            if (targetSnake.IsDefeated)
-                return;
+            Debug.LogWarning($"Cube ViewID {cubeViewID} not found.");
 
-
-            int myValue =
-                HeadValue;
-
-            int targetValue =
-                targetSnake.HeadValue;
-
-
-            // Same value cannot defeat
-            if (myValue <= targetValue)
-                return;
-
-
-            // Defeat target on all clients
-            photonView.RPC(
-                nameof(RPC_DefeatSnake),
-                RpcTarget.All,
-                targetSnake.photonView.ViewID,
-                photonView.ViewID
-            );
+            return;
         }
 
 
-        // =============================================
-        // APPLY COLLECTION ON ALL CLIENTS
-        // =============================================
-
-        photonView.RPC(
-            nameof(RPC_CollectCube),
-            RpcTarget.All,
-            cubeViewID,
-            value
-        );
-    }
-
-
-    // =====================================================
-    // COLLECT ON ALL CLIENTS
-    // =====================================================
-
-    [PunRPC]
-    private void RPC_CollectCube(
-        int cubeViewID,
-        int value)
-    {
-        PhotonView cubeView = PhotonView.Find(cubeViewID);
-        
-        if (cubeView == null)
-            return;
-
         GameObject collectedCube = cubeView.gameObject;
+
+        NumberCube numberCube = collectedCube.GetComponent<NumberCube>();
         
-        CollectValueInternal(value, collectedCube);
+        if (numberCube == null)
+        {
+            Debug.LogWarning("Collected object has no NumberCube.");
+
+            return;
+        }
+
+
+        int actualValue = numberCube.CubeValue;
+        
+        // Final validation happens here.
+        CollectValueInternal(actualValue, collectedCube);
     }
 
-
-    // =====================================================
+    
     // INTERNAL COLLECTION
-    // =====================================================
-
     private bool CollectValueInternal(
         int value,
         GameObject collectedCube)
     {
         if (_isDefeated)
-            return false;
+        return false;
 
-        if (collectedCube == null)
-            return false;
+    if (collectedCube == null)
+        return false;
 
-        if (collectedCube == gameObject)
-            return false;
+    if (collectedCube == gameObject)
+        return false;
 
-        if (_bodyCubes.Contains(collectedCube))
-            return false;
+    if (_bodyCubes.Contains(collectedCube))
+        return false;
+
+    
+    // CHECK VALUE BEFORE COLLECTING
+    if (value > HeadValue)
+        return false;
+
+    
+    // FIND OLD OWNER
+    SnakeController oldOwner =
+        GetOwnerOfCube(collectedCube);
 
 
-        // =============================================
-        // FIND OLD OWNER
-        // =============================================
+    if (oldOwner != null &&
+        oldOwner != this)
+    {
+        oldOwner.RemoveBodyCubeInternal(
+            collectedCube
+        );
+    }
 
-        SnakeController oldOwner = GetOwnerOfCube(collectedCube);
+    
+    // PHYSICS
+    Rigidbody rb =
+        collectedCube.GetComponent<Rigidbody>();
 
+    if (rb != null)
+    {
+        // IMPORTANT:
+        // Velocity MUST be cleared BEFORE
+        // making Rigidbody kinematic.
 
-        if (oldOwner != null && oldOwner != this)
+        if (!rb.isKinematic)
         {
-            oldOwner.RemoveBodyCubeInternal(collectedCube);
+            rb.linearVelocity =
+                Vector3.zero;
+
+            rb.angularVelocity =
+                Vector3.zero;
         }
 
-
-        // =============================================
-        // ADD TO SNAKE
-        // =============================================
-
-        _values.Add(value);
-
-        _bodyCubes.Add(collectedCube);
-        
-        collectedCube.transform.SetParent(transform, true);
-
-        // =============================================
-        // PHYSICS
-        // =============================================
-
-        Rigidbody rb = collectedCube.GetComponent<Rigidbody>();
-
-        if (rb != null)
-        {
-            rb.linearVelocity = Vector3.zero;
-
-            rb.angularVelocity = Vector3.zero;
-
-            rb.useGravity = false;
-
-            rb.isKinematic = true;
-        }
-
-
-        // =============================================
-        // SET BODY LAYER
-        // =============================================
-
-        SetBodyLayer(collectedCube);
-
-
-        // =============================================
-        // UPDATE
-        // =============================================
-
-        SortSnakeByValue();
-
-        UpdateAllVisuals();
-
-        UpdateBodyPositions();
-
-        PrintSnake();
-
-
-        // =============================================
-        // START MERGE
-        // =============================================
-
-        if (!_isMerging)
-        {
-            StartCoroutine(MergeRoutine());
-        }
-        
-        return true;
+        rb.useGravity = false;
+        rb.isKinematic = true;
     }
     
+    // ADD TO SNAKE
+    _values.Add(value);
+
+    _bodyCubes.Add(collectedCube);
+    
+    collectedCube.transform.SetParent(transform, true);
+    
+    // SET BODY LAYER
+    SetBodyLayer(collectedCube);
+    
+    // UPDATE SNAKE
+    SortSnakeByValue();
+
+    UpdateAllVisuals();
+
+    UpdateBodyPositions();
+
+    PrintSnake();
+
+    
+    // MERGE
+
+    if (!_isMerging)
+    {
+        StartCoroutine(MergeRoutine());
+    }
+
+
+    return true;
+}
     // FIND OWNER
     private SnakeController GetOwnerOfCube(
         GameObject cube)
