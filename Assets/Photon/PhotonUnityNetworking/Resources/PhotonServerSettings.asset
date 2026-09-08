@@ -46,6 +46,9 @@ MonoBehaviour:
   - RPC_MergeCubes
   - RPC_RemoveBodyCube
   - RPC_RequestCollect
+  - RPC_CollectSnake
+  - RPC_RequestCollectCube
+  - RPC_RequestCollectSnake
   DisableAutoOpenWizard: 1
   ShowSettings: 0
   DevRegionSetOnce: 0
